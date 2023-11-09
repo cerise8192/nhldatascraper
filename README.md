@@ -2,7 +2,7 @@ This will download the NHL data from the statsapi, htmlevents, and nhle and coll
 See 2023/02/0001 for the first game of the 2023-24 regular season.
 
 Run this by doing:
-#./nhl.py <tag>
+$ ./nhl.py $tag
 
 The tag consists of the first year of the season (i.e. 2015-2016 would be 2015),
 the season type (01 for preseason, 02 for regular season, 03 for playoffs),
