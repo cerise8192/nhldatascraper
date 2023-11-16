@@ -439,12 +439,12 @@ def get_gamedata(game):
 	keys=list(data)
 	for k in keys:
 		if data[k] is None:
-			print(gameid+': '+k+' failed to parse')
 			if k == 'LIVE':
 				del(data[k])
 			elif k == 'PXP':
 				del(data[k])
 			else:
+				print(gameid+': '+k+' failed to parse')
 				return None
 
 	return data
@@ -1613,6 +1613,9 @@ def get_decisions(data, collated):
 
 def collate(data):
 	data=fixgames(data)
+	f = open('predata.json', 'w')
+	f.write(json.dumps(data))
+	f.close()
 
 	collated={}
 	collated['lookup']={}
@@ -1652,7 +1655,23 @@ def fixgames(data):
 				print("   Removed")
 				data['RO']['scratches'][0].pop(i)
 				break
-	
+	elif data['GAME']['gamePk'] == "2023010016":
+		for playi in range(0, len(data['PL'])):
+			play=data['PL'][playi]
+			if play['Event'] == 'GEND':
+				play['#']=str(int(data['PL'][-1]['#'])+1)
+				del(data['PL'][playi])
+				data['PL'].append(play)
+				break
+
+		for playi in range(0, len(data['PXP']['plays'])):
+			play=data['PXP']['plays'][playi]
+			if play['typeDescKey'] == 'game-end':
+				del(data['PXP']['plays'][playi])
+				play['sortOrder']=data['PXP']['plays'][-1]['sortOrder']+1
+				data['PXP']['plays'].append(play)
+				break
+
 	return data
 
 def parsedesc(format, desc, play, player_lookup):
@@ -3531,17 +3550,121 @@ def process_game(game):
 	gamepath=get_game_path(game)
 
 	data=get_gamedata(game)
+	newdata=None
 	if data is not None:
 		print("Collating game: "+str(season)+"/"+str(type)+"/"+str(gamenum))
-		data=collate(data)
+		newdata=collate(data)
 
-	if data is not None:
-		data['version']=6
-		data['game']=game
+	if newdata is not None:
+		newdata['version']=7
+
+		try:
+			if len(data['PL']) > 0 and (data['PL'][-1]['Event'] == "GEND" or data['PL'][-1]['Event'] == "GOFF"):
+				newdata['status']="Final"
+			else:
+				newdata['status']="Ongoing"
+		except KeyError as e:
+			pass
+
+		try:
+			if (data['PXP']['gameState'] == 'FINAL' or data['PXP']['gameState'] == 'OFF') and data['PXP']['gameScheduleState'] == 'OK':
+				print("Final by gameState")
+				if 'status' in newdata and newdata['status'] == 'Ongoing':
+					print(str(data['PXP']['gameState'])+" == OFF/FINAL")
+					print(str(data['PXP']['gameScheduleState'])+" == OK")
+					print(str(data['PL'][-1]['Event'])+" == GEND/GOFF")
+					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == game-end")
+					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 527")
+					print(str(data['PXP']['clock']['running'])+" == false")
+					print(str(data['PXP']['clock']['inIntermission'])+" == false")
+					print("Game: "+str(newdata['GAME']['gamePk']))
+					exit(5)
+				newdata['status']="Final"
+			else:
+				print("Not final by gameState")
+				if 'status' in newdata and newdata['status'] == 'Final':
+					print(str(data['PXP']['gameState'])+" == OFF/FINAL")
+					print(str(data['PXP']['gameScheduleState'])+" == OK")
+					print(str(data['PL'][-1]['Event'])+" == GEND/GOFF")
+					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == game-end")
+					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 527")
+					print(str(data['PXP']['clock']['running'])+" == false")
+					print(str(data['PXP']['clock']['inIntermission'])+" == false")
+					print("Game: "+str(newdata['GAME']['gamePk']))
+					exit(5)
+				newdata['status']="Ongoing"
+
+			if len(data['PXP']['plays']) > 0 and data['PXP']['plays'][-1]['typeDescKey'] == 'game-end':
+				print("Final by last play typeDescKey")
+				if 'status' in newdata and newdata['status'] == 'Ongoing':
+					print(str(data['PXP']['gameState'])+" == OFF/FINAL")
+					print(str(data['PXP']['gameScheduleState'])+" == OK")
+					print(str(data['PL'][-1]['Event'])+" == GEND/GOFF")
+					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == game-end")
+					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 527")
+					print(str(data['PXP']['clock']['running'])+" == false")
+					print(str(data['PXP']['clock']['inIntermission'])+" == false")
+					print("Game: "+str(newdata['GAME']['gamePk']))
+					exit(5)
+				newdata['status']="Final"
+			else:
+				print("Not final by typeDescKey")
+				if 'status' in newdata and newdata['status'] == 'Final':
+					print(str(data['PXP']['gameState'])+" == OFF/FINAL")
+					print(str(data['PXP']['gameScheduleState'])+" == OK")
+					print(str(data['PL'][-1]['Event'])+" == GEND/GOFF")
+					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == game-end")
+					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 527")
+					print(str(data['PXP']['clock']['running'])+" == false")
+					print(str(data['PXP']['clock']['inIntermission'])+" == false")
+					print("Game: "+str(newdata['GAME']['gamePk']))
+					exit(5)
+				newdata['status']="Ongoing"
+
+			if len(data['PXP']['plays']) > 0 and data['PXP']['plays'][-1]['typeCode'] == 524:
+				print("Final by last play typeCode")
+				if 'status' in newdata and newdata['status'] == 'Ongoing':
+					print(str(data['PXP']['gameState'])+" == OFF/FINAL")
+					print(str(data['PXP']['gameScheduleState'])+" == OK")
+					print(str(data['PL'][-1]['Event'])+" == GEND/GOFF")
+					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == game-end")
+					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 527")
+					print(str(data['PXP']['clock']['running'])+" == false")
+					print(str(data['PXP']['clock']['inIntermission'])+" == false")
+					print("Game: "+str(newdata['GAME']['gamePk']))
+					exit(5)
+				newdata['status']="Final"
+			else:
+				print("Not final by typeCode")
+				if 'status' in newdata and newdata['status'] == 'Final':
+					print(str(data['PXP']['gameState'])+" == OFF/FINAL")
+					print(str(data['PXP']['gameScheduleState'])+" == OK")
+					print(str(data['PL'][-1]['Event'])+" == GEND/GOFF")
+					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == game-end")
+					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 527")
+					print(str(data['PXP']['clock']['running'])+" == false")
+					print(str(data['PXP']['clock']['inIntermission'])+" == false")
+					print("Game: "+str(newdata['GAME']['gamePk']))
+					exit(5)
+				newdata['status']="Ongoing"
+
+			print(json.dumps(data['PXP']['clock'], indent=3))
+#			if data['PXP']['clock']['secondsRemaining'] == 0 and data['PXP']['clock']['running'] == False and data['PXP']['clock']['inIntermission'] == False:
+#				print("Final by clock")
+#				if 'status' in newdata and newdata['status'] == 'Ongoing':
+#					exit(5)
+#				newdata['status']="Final"
+#			else:
+#				print("Not final by clock")
+#				if 'status' in newdata and newdata['status'] == 'Final':
+#				newdata['status']="Ongoing"
+
+		except KeyError as e:
+			pass
 
 		print("Writing game: "+str(season)+"/"+str(type)+"/"+str(gamenum))
 		f=open(gamepath, 'w')
-		f.write(json.dumps(data))
+		f.write(json.dumps(newdata))
 		f.close()
 
 def wipe_game_cache(game):
@@ -3580,23 +3703,27 @@ def wipe_game_cache(game):
 
 def final_game(game):
 	gamepath=get_game_path(game)
+	game={}
 	try:
 		f=open(gamepath, 'r')
-		gamedoc=json.loads(''.join(f.readlines()))
+		gamedoc=''.join(f.readlines())
+		game=json.loads(gamedoc)
 		f.close()
-
-		if gamedoc['game']['status']['abstractGameState'] == 'Final':
-			if gamedoc['version'] >= 6:
-				return True
-			else:
-				print("Version == "+str(gamedoc['version'])+" < 5")
-		else:
-			print("Game state == "+gamedoc['game']['status']['abstractGameState']+" != Final")
 	except FileNotFoundError as e:
-		pass
-	except KeyError as e:
+		print(e)
 		pass
 	except Exception as e:
+		print(e)
+		pass
+
+	try:
+		if game['status'] == 'Final' and game['version'] == 7:
+			return True
+	except KeyError as e:
+		print(e)
+		pass
+	except Exception as e:
+		print(e)
 		pass
 
 	return False
@@ -3652,8 +3779,11 @@ def main():
 			print("Processing "+gamepk)
 			game=make_game_struct(gamepk)
 			if not final_game(game):
+				print("  Need to process!")
 				wipe_game_cache(game)
 				process_game(game)
+			else:
+				print("  Skipping!")
 
 	else:
 		day=datetime.timedelta(days=1)
