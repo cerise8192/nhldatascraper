@@ -1647,30 +1647,42 @@ def collate(data):
 	return collated
 
 def fixgames(data):
-	if data['GAME']['gamePk'] == "2022010048":
+	if int(data['GAME']['gamePk']) == 2022010048:
 		print("Fixing up SEA #4 DANNY DEKEYSER")
 		for i in range(0, len(data['RO']['scratches'][1])):
 			roentry=data['RO']['scratches'][0][i]
 			if roentry['#'] == "4" and roentry['Name'] == 'DANNY DEKEYSER' and roentry['Team'] == 'SEA':
-				print("   Removed")
 				data['RO']['scratches'][0].pop(i)
+				print("   Removed RO")
 				break
-	elif data['GAME']['gamePk'] == "2023010016":
+		for i in range(0, len(data['PXP']['summary']['gameInfo']['awayTeam']['scratches'])):
+			pxpentry=data['PXP']['summary']['gameInfo']['awayTeam']['scratches'][i]
+			if pxpentry['id'] == 8477215:
+				data['PXP']['summary']['gameInfo']['awayTeam']['scratches'].pop(i)
+				print("   Removed PXP")
+				break
+		sys.stdin.readline()
+	elif int(data['GAME']['gamePk']) == 2023010016:
 		for playi in range(0, len(data['PL'])):
 			play=data['PL'][playi]
 			if play['Event'] == 'GEND':
+				data['PL'].pop(playi)
 				play['#']=str(int(data['PL'][-1]['#'])+1)
-				del(data['PL'][playi])
 				data['PL'].append(play)
+				print("Fixed PL")
 				break
 
 		for playi in range(0, len(data['PXP']['plays'])):
 			play=data['PXP']['plays'][playi]
 			if play['typeDescKey'] == 'game-end':
-				del(data['PXP']['plays'][playi])
+				data['PXP']['plays'].pop(playi)
 				play['sortOrder']=data['PXP']['plays'][-1]['sortOrder']+1
 				data['PXP']['plays'].append(play)
+				print("Fixed PXP")
 				break
+	else:
+		print("Fine as is?!")
+		exit(5)
 
 	return data
 
@@ -2407,9 +2419,6 @@ def merge_loop(data, collated):
 	toitree=build_toi_tree(collated)
 	
 	while playi < len(collated['plays']):
-		play=collated['plays'][playi]
-		collated['plays'][playi]=play
-
 		#Use lists of players to create off/stay/on
 		collated=get_onice_one(collated, playi)
 
@@ -2419,6 +2428,15 @@ def merge_loop(data, collated):
 		collated=merge_pl_live_one(data, collated, playi)
 
 		collated=merge_pl_pxp_one(data, collated, playi)
+
+		if 'changeevents' in collated['plays'][playi]:
+			while len(collated['plays'][playi]['changeevents']) > 0:
+				change=collated['plays'][playi]['changeevents'].pop(0)
+				collated['plays'].insert(playi, change)
+				playi=playi+1
+			del(collated['plays'][playi]['changeevents'])
+		if 'changes' in collated['plays'][playi]:
+			del(collated['plays'][playi]['changes'])
 
 		playi=playi+1
 
@@ -2574,12 +2592,13 @@ def get_onice_one(collated, playi):
 					else:
 						print("No lookup for "+n)
 						exit(132)
-					if debug:
-						print("    Play: "+abv+" "+str(nhlid))
-					if nhlid in oldonice[abv]:
-						onice[abv][nhlid]=oldonice[abv][nhlid]
-					else:
-						onice[abv][nhlid]=play['dt']
+
+				if debug:
+					print("    Play: "+abv+" "+str(nhlid))
+				if nhlid in oldonice[abv]:
+					onice[abv][nhlid]=oldonice[abv][nhlid]
+				else:
+					onice[abv][nhlid]=play['dt']
 		if 'PXP' in play and 'details' in play['PXP']:
 			for playerkey in ['playerId']:
 				if playerkey in play['PXP']['details']:
@@ -3556,7 +3575,7 @@ def process_game(game):
 		newdata=collate(data)
 
 	if newdata is not None:
-		newdata['version']=7
+		newdata['version']=1
 
 		try:
 			if len(data['PL']) > 0 and (data['PL'][-1]['Event'] == "GEND" or data['PL'][-1]['Event'] == "GOFF"):
@@ -3717,7 +3736,7 @@ def final_game(game):
 		pass
 
 	try:
-		if game['status'] == 'Final' and game['version'] == 7:
+		if game['status'] == 'Final' and game['version'] == 1:
 			return True
 	except KeyError as e:
 		print(e)
@@ -3788,7 +3807,7 @@ def main():
 	else:
 		day=datetime.timedelta(days=1)
 		now=datetime.datetime.today()
-#		now=datetime.datetime(2022, 11, 2)
+		now=datetime.datetime(2023, 9, 25)
 		then=datetime.datetime(2000, 8, 1)
 #		then=now
 		while now >= then:
