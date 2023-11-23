@@ -2615,23 +2615,25 @@ def get_onice_one(collated, playi):
 	for abv in onice:
 		play[abv]['onice']=onice[abv]
 
-		for nhlid in oldonice[abv]:
-			if nhlid in onice[abv]:
-				play[abv]['stay'].append(nhlid)
-				if debug:
-					print("       = "+abv+" "+str(nhlid))
-			else:
-				play[abv]['off'].append(nhlid)
-				if debug:
-					print("       - "+abv+" "+str(nhlid))
+		if len(list(oldonice[abv])) > 0:
+			for nhlid in oldonice[abv]:
+				if nhlid in onice[abv]:
+					play[abv]['stay'].append(nhlid)
+					if debug:
+						print("       = "+abv+" "+str(nhlid))
+				else:
+					play[abv]['off'].append(nhlid)
+					if debug:
+						print("       - "+abv+" "+str(nhlid))
 
-		for nhlid in onice[abv]:
-			if nhlid == '':
-				exit(39)
-			if nhlid not in oldonice[abv]:
-				play[abv]['on'].append(nhlid)
-				if debug:
-					print("       + "+abv+" "+str(nhlid))
+		if len(list(onice[abv])) > 0:
+			for nhlid in onice[abv]:
+				if nhlid == '':
+					exit(39)
+				if nhlid not in oldonice[abv]:
+					play[abv]['on'].append(nhlid)
+					if debug:
+						print("       + "+abv+" "+str(nhlid))
 
 	if debug:
 		print("--- get_onice_one")
@@ -3807,7 +3809,6 @@ def main():
 	else:
 		day=datetime.timedelta(days=1)
 		now=datetime.datetime.today()
-		now=datetime.datetime(2023, 9, 25)
 		then=datetime.datetime(2000, 8, 1)
 #		then=now
 		while now >= then:
