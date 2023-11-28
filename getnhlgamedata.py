@@ -1261,9 +1261,12 @@ def get_players_live(data, collated):
 	return collated
 
 def get_players_pxp(data, collated):
+	debugnames=[]
+	debugids=[]
+	debug=False
 	if 'PXP' not in data:
 		return collated
-	debug=True
+
 	for roster in data['PXP']['rosterSpots']:
 		player=roster
 		teamkey=collated['lookup']['teams'][str(roster['teamId'])]
@@ -1292,14 +1295,42 @@ def get_players_pxp(data, collated):
 			player['lastName']['default']=tempname
 
 		targets=get_name_combos(name)
+
+		if len(debugnames) > 0:
+			debug=False
+			for dns in debugnames:
+				for dn in get_name_combos(dns):
+					for n in targets:
+						if dn == n:
+							debug=True
+							break
+					if debug:
+						break
+				if debug:
+					break
+		if not debug and len(debugids) > 0:
+			debug=False
+			for debugid in debugids:
+				if debugid==nhlid:
+					debug=True
+					break
+
+		if debug:
+			print("PXP (dressed): "+name)
 		for n in targets:
 			if n in collated['exclude']['players']:
+				if debug:
+					print("   "+str(n)+" XXXX")
 				continue
 			elif n in collated['lookup']['players']:
 				if collated['lookup']['players'][n] != nhlid:
+					if debug:
+						print("   "+str(n)+" -/-> "+str(nhlid))
 					collated['exclude']['players'][n]=True
 					del(collated['lookup']['players'][n])
 			else:
+				if debug:
+					print("   "+str(n)+" ---> "+str(nhlid))
 				collated['lookup']['players'][n]=nhlid
 
 		if nhlid not in collated['players']:
@@ -1345,14 +1376,42 @@ def get_players_pxp(data, collated):
 			#player['Position']=???
 
 			targets=get_name_combos(name)
+
+			if len(debugnames) > 0:
+				debug=False
+				for dns in debugnames:
+					for dn in get_name_combos(dns):
+						for n in targets:
+							if dn == n:
+								debug=True
+								break
+						if debug:
+							break
+					if debug:
+						break
+			if not debug and len(debugids) > 0:
+				debug=False
+				for debugid in debugids:
+					if debugid==nhlid:
+						debug=True
+						break
+
+			if debug:
+				print("PXP (scratched): "+name)
 			for n in targets:
 				if n in collated['exclude']['players']:
+					if debug:
+						print("   Scratch: "+str(n)+" XXXX")
 					continue
 				elif n in collated['lookup']['players'] and collated['lookup']['players'][n] != nhlid:
 					collated['exclude']['players'][n]=True
 					del(collated['lookup']['players'][n])
+					if debug:
+						print("   Scratch: "+str(n)+" -/-> "+str(collated['lookup']['players'][n])+" != "+str(nhlid))
 				else:
 					collated['lookup']['players'][n]=nhlid
+					if debug:
+						print("   Scratch: "+str(n)+" ---> "+str(collated['lookup']['players'][n])+" != "+str(nhlid))
 
 			if nhlid not in collated['players']:
 				collated['players'][nhlid]={}
@@ -1388,7 +1447,7 @@ def get_players_pxp(data, collated):
 	return collated
 
 def get_players_ro(data, collated):
-	debug=True
+	debug=False
 	debugnames=[]
 	debugids=[]
 
@@ -1400,6 +1459,7 @@ def get_players_ro(data, collated):
 		for teami in range(0, len(data['RO'][rostertype])):
 			for playeri in range(0, len(data['RO'][rostertype][teami])):
 				player=data['RO'][rostertype][teami][playeri]
+
 				if rostertype == 'scratches' or player['#'] == '0':
 					player['Scratched']=True
 				else:
@@ -1418,7 +1478,22 @@ def get_players_ro(data, collated):
 				player['key']=key
 				roplayers[key]=player
 
-				for t in get_name_combos(key):
+				subkeys=get_name_combos(key)
+
+				if len(debugnames) > 0:
+					debug=False
+					for debugname in debugnames:
+						for dn in get_name_combos(debugname):
+							for sk in subkeys:
+								if dn == sk:
+									debug=True
+									break
+							if debug:
+								break
+				if debug:
+					print("Start with "+key)
+
+				for t in subkeys:
 					if t in nameexclude:
 						if debug:
 							print("   "+t+" XXXX "+key)
@@ -1437,20 +1512,43 @@ def get_players_ro(data, collated):
 	for key in roplayers:
 		best={}
 		print("Get ID for name: "+key)
-		for t in get_name_combos(key):
+
+		subkeys=get_name_combos(key)
+		if len(debugnames) > 0:
+			debug=False
+			for debugname in debugnames:
+				for dn in get_name_combos(debugname):
+					for sk in subkeys:
+						if dn == sk:
+							debug=True
+							break
+					if debug:
+						break
+		if not debug and len(debugids) > 0:
+			for sk in subkeys:
+				for debugid in debugids:
+					if sk in collated['lookup']['players'] and collated['lookup']['players'][sk] == debugid:
+						debug=True
+						break
+				if debug:
+					break
+
+		for t in subkeys:
 			if t in collated['exclude']['players']:
 				if debug:
-					print("   "+t+" XXXX by id "+str(newkey))
+					print("   "+t+" XXXX by id")
 			elif t in nameexclude:
 				if debug:
-					print("   "+t+" XXXX by name "+str(newkey))
+					print("   "+t+" XXXX by name")
 			elif t in collated['lookup']['players']:
 				newkey=collated['lookup']['players'][t]
-				if debug:
-					print("   "+t+" ---> "+str(newkey))
 				if newkey not in best:
 					best[newkey]=0
 				best[newkey]=best[newkey]+1
+				if debug:
+					print("   "+t+" ---> "+str(newkey)+" ["+str(best[newkey]))
+			elif debug:
+				print("   "+t+" has no key")
 
 		bestfit=sorted(best.items(), key=lambda x:x[1], reverse=True)
 		if len(bestfit) == 1:
@@ -1660,7 +1758,20 @@ def fixgames(data):
 			if pxpentry['id'] == 8477215:
 				data['PXP']['summary']['gameInfo']['awayTeam']['scratches'].pop(i)
 				print("   Removed PXP")
-				break
+		pxpentry={}
+		pxpentry['teamId']=23
+		pxpentry['playerId']=8477967
+		pxpentry['firstName']={}
+		pxpentry['firstName']['default']='Danny'
+		pxpentry['lastName']={}
+		pxpentry['lastName']['default']='DeKeyser'
+		pxpentry['sweaterNumber']=4
+		pxpentry['positionCode']='C'
+#		pxpentry['headshot']="https://assets.nhle.com/mugs/nhl/latest/8477215.png"
+		pxpentry['headshot']="https://assets.nhle.com/mugs/nhl/20222023/VAN/"+pxpentry['playerId']+".png"
+		data['PXP']['rosterSpots'].append(pxpentry)
+		print("   Inserted roster entry")
+
 		sys.stdin.readline()
 	elif int(data['GAME']['gamePk']) == 2023010016:
 		for playi in range(0, len(data['PL'])):
@@ -2574,7 +2685,8 @@ def get_onice_one(collated, playi):
 				for p in oldplay[abv]['onice']:
 					if debug:
 						print("   Start: "+abv+" "+str(p))
-					oldonice[abv][p]=oldplay[abv]['onice'][p]
+					if p != '':
+						oldonice[abv][p]=oldplay[abv]['onice'][p]
 
 	for teampos in ['away', 'home']:
 		abv=collated['teams'][teampos]['abv']
@@ -2583,22 +2695,31 @@ def get_onice_one(collated, playi):
 			if k in play['PL']:
 				for n in play['PL'][k].split(','):
 					nhlid=str(n)
+					if n == '':
+						continue
 					if re.match('^\s*[0-9]+\s*$', n):
 						pass
+					elif n in collated['exclude']['players']:
+						continue
 					elif n in collated['lookup']['players']:
 						nhlid=str(collated['lookup']['players'][n])
 					elif n == "":
 						continue
 					else:
+						for nf in get_name_combos(n):
+							if nf in collated['exclude']['players']:
+								continue
+							if nf in collated['lookup']['players']:
+								print(str(nf)+" -> "+str(collated['lookup']['players'][nf]))
 						print("No lookup for "+n)
 						exit(132)
 
-				if debug:
-					print("    Play: "+abv+" "+str(nhlid))
-				if nhlid in oldonice[abv]:
-					onice[abv][nhlid]=oldonice[abv][nhlid]
-				else:
-					onice[abv][nhlid]=play['dt']
+					if debug:
+						print("    Play: "+abv+" "+str(nhlid))
+					if nhlid in oldonice[abv]:
+						onice[abv][nhlid]=oldonice[abv][nhlid]
+					else:
+						onice[abv][nhlid]=play['dt']
 		if 'PXP' in play and 'details' in play['PXP']:
 			for playerkey in ['playerId']:
 				if playerkey in play['PXP']['details']:
@@ -2613,31 +2734,32 @@ def get_onice_one(collated, playi):
 						onice[abv][nhlid]=play['dt']
 
 	for abv in onice:
+		if '' in oldonice[abv]:
+			del(oldonice[abv][''])
+		if '' in onice[abv]:
+			del(onice[abv][''])
 		play[abv]['onice']=onice[abv]
 
-		if len(list(oldonice[abv])) > 0:
-			for nhlid in oldonice[abv]:
-				if nhlid in onice[abv]:
-					play[abv]['stay'].append(nhlid)
-					if debug:
-						print("       = "+abv+" "+str(nhlid))
-				else:
-					play[abv]['off'].append(nhlid)
-					if debug:
-						print("       - "+abv+" "+str(nhlid))
+		for nhlid in oldonice[abv]:
+			if nhlid in onice[abv]:
+				play[abv]['stay'].append(nhlid)
+				if debug:
+					print("       = "+abv+" "+str(nhlid))
+			else:
+				play[abv]['off'].append(nhlid)
+				if debug:
+					print("       - "+abv+" "+str(nhlid))
 
-		if len(list(onice[abv])) > 0:
-			for nhlid in onice[abv]:
-				if nhlid == '':
-					exit(39)
-				if nhlid not in oldonice[abv]:
-					play[abv]['on'].append(nhlid)
-					if debug:
-						print("       + "+abv+" "+str(nhlid))
+		for nhlid in onice[abv]:
+			if nhlid not in oldonice[abv]:
+				play[abv]['on'].append(nhlid)
+				if debug:
+					print("       + "+abv+" "+str(nhlid))
 
 	if debug:
 		print("--- get_onice_one")
-		#sys.stdin.readline()
+		if play['PLEvent'] == 'PSTR':
+			sys.stdin.readline()
 	collated['plays'][playi]=play
 
 	return collated
@@ -2646,6 +2768,7 @@ def merge_toi_one(collated, playi, toitree):
 	debug=True
 	play=collated['plays'][playi]
 	if debug:
+		print(json.dumps(play, indent=3))
 		print("#"+str(playi)+". "+str(play['Period'])+" "+play['Elapsed']+" = "+str(play['dt'])+" - "+play['PLEvent'])
 
 	play['changes']=[]
