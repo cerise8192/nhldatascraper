@@ -1791,9 +1791,6 @@ def fixgames(data):
 				data['PXP']['plays'].append(play)
 				print("Fixed PXP")
 				break
-	else:
-		print("Fine as is?!")
-		exit(5)
 
 	return data
 
