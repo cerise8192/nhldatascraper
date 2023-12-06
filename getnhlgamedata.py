@@ -1617,45 +1617,116 @@ def merge_shifts(collated):
 	for key in collated['players']:
 		if 'shifts' not in collated['players'][key]:
 			continue
-		if 'PXP' not in collated['players'][key]['shifts']:
-			continue
-		if 'THV' not in collated['players'][key]['shifts']:
-			continue
-		i=0
+
 		shiftsbydt={}
-		while i < len(collated['players'][key]['shifts']['THV']):
-			thvshift=collated['players'][key]['shifts']['THV'][i]
-			thvshift['StartDT']=decimaltime(thvshift['StartEL'], thvshift['Per'])
-			thvshift['EndDT']=decimaltime(thvshift['EndEL'], thvshift['Per'])
-			collated['players'][key]['shifts']['THV'][i]=thvshift
-			if thvshift['StartDT'] not in shiftsbydt:
-				shiftsbydt[thvshift['StartDT']]=[]
-			shiftsbydt[thvshift['StartDT']].append(thvshift)
-			i=i+1
+		if 'THV' in collated['players'][key]['shifts']:
+			i=0
+			while i < len(collated['players'][key]['shifts']['THV']):
+				thvshift=collated['players'][key]['shifts']['THV'][i]
 
-		i=0
-		while i < len(collated['players'][key]['shifts']['PXP']):
-			pxpshift=collated['players'][key]['shifts']['PXP'][i]
-			pxpshift['StartDT']=decimaltime(pxpshift['startTime'], pxpshift['period'])
-			pxpshift['EndDT']=decimaltime(pxpshift['endTime'], pxpshift['period'])
-			collated['players'][key]['shifts']['PXP'][i]=pxpshift
-			if pxpshift['StartDT'] in shiftsbydt:
-				for thvshift in shiftsbydt[pxpshift['StartDT']]:
-					if thvshift['EndDT'] != pxpshift['EndDT']:
+				shift={}
+				shift['StartDT']=decimaltime(thvshift['StartEL'], thvshift['Per'])
+				shift['EndDT']=decimaltime(thvshift['EndEL'], thvshift['Per'])
+				shift['nhlid']=key
+				shift['THV']=thvshift
+
+				if shift['StartDT'] not in shiftsbydt:
+					shiftsbydt[shift['StartDT']]=[]
+
+				found=None
+				for j in range(0, len(shiftsbydt[shift['StartDT']])):
+					compshift=shiftsbydt[shift['StartDT']][j]
+					if compshift['EndDT'] != shift['EndDT']:
 						continue
-
+					if compshift['nhlid'] != shift['nhlid']:
+						continue
+					found=j
 					break
-			i=i+1
+
+				if found is None:
+					shiftsbydt[shift['StartDT']].append(shift)
+				else:
+					shiftsbydt[shift['StartDT']][found]['THV']=thvshift
+
+				i=i+1
+
+		if 'PXP' in collated['players'][key]['shifts']:
+			i=0
+			while i < len(collated['players'][key]['shifts']['PXP']):
+				pxpshift=collated['players'][key]['shifts']['PXP'][i]
+
+				shift={}
+				shift['StartDT']=decimaltime(pxpshift['startTime'], pxpshift['period'])
+				shift['EndDT']=decimaltime(pxpshift['endTime'], pxpshift['period'])
+				shift['nhlid']=key
+				shift['PXP']=pxpshift
+
+				if shift['StartDT'] not in shiftsbydt:
+					shiftsbydt[shift['StartDT']]=[]
+
+				found=None
+				for j in range(0, len(shiftsbydt[shift['StartDT']])):
+					compshift=shiftsbydt[shift['StartDT']][j]
+					if compshift['EndDT'] != shift['EndDT']:
+						continue
+					if compshift['nhlid'] != shift['nhlid']:
+						continue
+					found=j
+					break
+
+				if found is None:
+					shiftsbydt[shift['StartDT']].append(shift)
+				else:
+					shiftsbydt[shift['StartDT']][found]['PXP']=pxpshift
+
+				i=i+1
+
+		for shifttype in ['PXP', 'THV']:
+			if shifttype in collated['players'][key]['shifts']:
+				del(collated['players'][key]['shifts'][shifttype])
+
+		collated['players'][key]['shifts']=[]
+
+		shifts=sorted(shiftsbydt.items(), key=lambda x:x[0])
+		for tuple in shifts:
+			collated['players'][key]['shifts'].append(tuple[1][0])
+
+		shifti=0
+		while shifti < len(collated['players'][key]['shifts']):
+			shift=collated['players'][key]['shifts'][shifti]
+			shiftj=shifti+1
+			while shiftj < len(collated['players'][key]['shifts']):
+				overshift=collated['players'][key]['shifts'][shiftj]
+				if overshift['StartDT'] > shift['EndDT']:
+					break
+
+				if overshift['StartDT'] <= shift['EndDT']:
+					if overshift['EndDT'] > shift['EndDT']:
+						collated['players'][key]['shifts'][shifti]['EndDT']=overshift['EndDT']
+					if 'overlap' not in collated['players'][key]['shifts'][shifti]:
+						collated['players'][key]['shifts'][shifti]['overlap']=[]
+					collated['players'][key]['shifts'][shifti]['overlap'].append(overshift)
+					shifti=shifti-1
+					collated['players'][key]['shifts'].pop(shiftj)
+					break
+					
+				shiftj=shiftj+1
+			shifti=shifti+1
 
 	return collated
 
 def get_shifts_pxp(data, collated):
 	if 'PXP' not in data:
 		return collated
+	
 	for shift in data['PXP']['shifts']['data']:
+		print(json.dumps(shift, indent=3))
 		key = shift['playerId']
 		if key is None:
 			continue
+
+		startdt=decimaltime(shift['startTime'], shift['period'])
+		enddt=decimaltime(shift['startTime'], shift['period'])
 
 		if key not in collated['players']:
 			for k in collated['players']:
@@ -1675,6 +1746,7 @@ def get_shifts_pxp(data, collated):
 		#playerId
 		#teamId
 	return collated
+
 
 def get_shifts_thv(data, collated):
 	for player in data['TH']:
@@ -1708,6 +1780,27 @@ def get_decisions(data, collated):
 	collated['decisions']={}
 
 	return collated
+
+def print_shifts(collated, nhlid):
+	print("Shifts for "+str(nhlid))
+	if 'shifts' in collated['players'][int(nhlid)]:
+		if type(collated['players'][int(nhlid)]['shifts']) == type([]):
+			for shifti in range(0, len(collated['players'][int(nhlid)]['shifts'])):
+				shift=collated['players'][int(nhlid)]['shifts'][shifti]
+				if 'StartDT' not in shift or 'EndDT' not in shift:
+					print(json.dumps(shift))
+				elif 'PXP' in shift and 'THV' in shift:
+					print("   "+str(shifti)+". "+undectime(shift['StartDT'])+" - "+undectime(shift['EndDT'])+" (THV, PXP)")
+				elif 'PXP' in shift:
+					print("   "+str(shifti)+". "+undectime(shift['StartDT'])+" - "+undectime(shift['EndDT'])+" (PXP)")
+				elif 'THV' in shift:
+					print("   "+str(shifti)+". "+undectime(shift['StartDT'])+" - "+undectime(shift['EndDT'])+" (THV)")
+				elif 'generated' in shift:
+					print("   "+str(shifti)+". "+undectime(shift['StartDT'])+" - "+undectime(shift['EndDT'])+" (generated)")
+				else:
+					print("   "+str(shifti)+". "+undectime(shift['StartDT'])+" - "+undectime(shift['EndDT']))
+		else:
+			print(json.dumps(collated['players'][int(nhlid)]['shifts'], indent=3))
 
 def collate(data):
 	data=fixgames(data)
@@ -2453,7 +2546,70 @@ def parse_pl(data, collated):
 	return (data, collated)
 
 def build_toi_tree(collated):
-	return build_toi_tree_from_thv(collated)
+	return build_toi_tree_from_combined(collated)
+	#return build_toi_tree_from_thv(collated)
+
+def build_toi_tree_from_combined(collated):
+	toitree={}
+	poslookup={}
+	for pos in collated['teams']:
+		abv = collated['teams'][pos]['abv']
+		poslookup[abv]=pos
+
+	for nhlid in collated['players']:
+		team=collated['players'][nhlid]['Team']
+		teampos=poslookup[team]
+
+		for i in range(0, len(collated['players'][nhlid]['shifts'])):
+			shift=collated['players'][nhlid]['shifts'][i]
+			if 'StartDT' in shift:
+				onshift={}
+				onshift['Shift']=i
+				onshift['Player']=nhlid
+				onshift['Team']=team
+				onshift['TeamPos']=teampos
+				onshift['dt']=shift['StartDT']
+				onshift['type']='on'
+
+				if onshift['dt'] not in toitree:
+					toitree[onshift['dt']]={}
+				if teampos not in toitree[onshift['dt']]:
+					toitree[onshift['dt']][teampos]={}
+				if 'on' not in toitree[onshift['dt']][teampos]:
+					toitree[onshift['dt']][teampos]['on']=[]
+				toitree[onshift['dt']][teampos]['on'].append(onshift)
+
+			if 'EndDT' in shift:
+				offshift={}
+				offshift['Shift']=i
+				offshift['Player']=nhlid
+				offshift['Team']=team
+				offshift['TeamPos']=teampos
+				offshift['dt']=shift['EndDT']
+				offshift['type']='off'
+
+				if offshift['dt'] not in toitree:
+					toitree[offshift['dt']]={}
+				if teampos not in toitree[offshift['dt']]:
+					toitree[offshift['dt']][teampos]={}
+				if 'off' not in toitree[offshift['dt']][teampos]:
+					toitree[offshift['dt']][teampos]['off']=[]
+				toitree[offshift['dt']][teampos]['off'].append(offshift)
+	
+	for dt in toitree:
+		order=[]
+		for teampos in ['away', 'home']:
+			if teampos not in toitree[dt]:
+				continue
+			for shifttype in ['off', 'on']:
+				if shifttype not in toitree[dt][teampos]:
+					continue
+
+				for shift in toitree[dt][teampos][shifttype]:
+					order.append(shift)
+		toitree[dt]=order
+
+	return toitree
 
 def build_toi_tree_from_thv(collated):
 	debug=False
@@ -2524,14 +2680,14 @@ def merge_loop(data, collated):
 
 	collated['temp']={}
 	playi=0
-	toitree=build_toi_tree(collated)
+	collated['temp']['toi']=build_toi_tree(collated)
 	
 	while playi < len(collated['plays']):
 		#Use lists of players to create off/stay/on
 		collated=get_onice_one(collated, playi)
 
 		#Use off/stay/on data to create changes with related TH/TV data
-		collated=merge_toi_one(collated, playi, toitree)
+		collated=merge_toi_one(collated, playi)
 
 		collated=merge_pl_live_one(data, collated, playi)
 
@@ -2761,382 +2917,193 @@ def get_onice_one(collated, playi):
 
 	return collated
 
-def merge_toi_one(collated, playi, toitree):
-	debug=True
+def merge_toi_one(collated, playi):
 	play=collated['plays'][playi]
-	if debug:
-		print(json.dumps(play, indent=3))
-		print("#"+str(playi)+". "+str(play['Period'])+" "+play['Elapsed']+" = "+str(play['dt'])+" - "+play['PLEvent'])
-
 	play['changes']=[]
-	ft = decimaltime(play['Elapsed'])+decimaltime(play['Remaining'])
-	onice={}
-	for teampos in ['away', 'home']:
-		abv=collated['teams'][teampos]['abv']
-		onice[abv]={}
 
-	if playi > 0:
-		oldplay=collated['plays'][playi-1]
-		for teampos in ['away', 'home']:
-			abv=collated['teams'][teampos]['abv']
-			for nhlid in oldplay[abv]['onice']:
-				onice[abv][nhlid]=oldplay[abv]['onice'][nhlid]
-
-			if debug:
-				for nhlid in play[abv]['onice']:
-					if str(nhlid) in onice[abv] or nhlid in onice[abv]:
-						print("Stay (  "+str(play['dt'])+"): "+abv+" "+str(nhlid)+" "+collated['players'][int(nhlid)]['Name'])
-				for nhlid in onice[abv]:
-					if str(nhlid) not in play[abv]['onice'] and nhlid not in play[abv]['onice']:
-						print("Exit (<="+str(play['dt'])+"): "+abv+" "+str(nhlid)+" "+collated['players'][int(nhlid)]['Name'])
-				for nhlid in play[abv]['onice']:
-					if str(nhlid) not in onice[abv] and nhlid not in onice[abv]:
-						print("Need (<="+str(play['dt'])+"): "+abv+" "+str(nhlid)+" "+collated['players'][int(nhlid)]['Name'])
-	else:
-		for teampos in ['away', 'home']:
-			abv=collated['teams'][teampos]['abv']
-			if debug:
-				for nhlid in play[abv]['onice']:
-					print("Need (<="+str(play['dt'])+"): "+abv+" "+str(nhlid))
-
-
-	for dt in sorted(list(toitree)):
-		if dt >= play['dt']:
-			break
-
-		oldnchanges=0
-		while len(toitree[dt]) > 0:
-			nchanges=0
-			for teampos in ['away', 'home']:
-				abv=collated['teams'][teampos]['abv']
-				if teampos not in toitree[dt]:
-					continue
-
-				for type in ['off', 'on']:
-					if type not in toitree[dt][teampos]:
-						continue
-
-					if debug:
-						print(str(dt)+"/"+str(play['dt'])+" "+abv+" "+type)
-					remove=[]
-					for changei in range(0, len(toitree[dt][teampos][type])):
-						nchanges=nchanges+1
-						change=toitree[dt][teampos][type][changei]
-						nhlid=str(change['Player'])
-
-						if type == 'off':
-							if debug:
-								print("   _- "+str(changei)+" "+abv+" "+str(nhlid)+" "+collated['players'][int(nhlid)]['Name'])
-							if nhlid not in onice[abv]:
-								playerchange=collated['players'][change['Player']]['shifts']['THV'][change['Shift']]
-								t = playerchange['StartDT']
-								ignore=False
-								delpeni=playi
-								delpen=collated['plays'][delpeni]
-								while delpen['dt'] >= t and delpeni > 0:
-									if delpen['PLEvent'] == 'DELPEN':
-										ignore=True
-										break
-									delpeni=delpeni-1
-									delpen=collated['plays'][delpeni]
-
-								if ignore:
-									if debug:
-										print("      Alternate timeline.  Ignore")
-								else:
-									if debug:
-										print(json.dumps(playerchange, indent=3))
-										print(collated['gamePk'])
-										print("      Not in onice!  Fail.")
-									exit(43)
-							else:
-								del(onice[abv][nhlid])
-
-						elif type == 'on':
-							if debug:
-								print("   _+ "+str(changei)+" "+abv+" "+str(nhlid)+" "+collated['players'][int(nhlid)]['Name'])
-							if nhlid in onice[abv]:
-								if change['Shift'] > 0:
-									playerchange=collated['players'][change['Player']]['shifts']['THV'][change['Shift']-1]
-									t = playerchange['EndDT']
-								else:
-									playerchange=collated['players'][change['Player']]['shifts']['THV'][change['Shift']]
-									t = 0
-								ignore=False
-								delpeni=playi
-								delpen=collated['plays'][delpeni]
-								while delpen['dt'] >= t and delpeni > 0:
-									if delpen['PLEvent'] == 'DELPEN':
-										ignore=True
-										break
-									delpeni=delpeni-1
-									delpen=collated['plays'][delpeni]
-
-								if ignore:
-									if debug:
-										print("      Alternate timeline.  Ignore")
-								else:
-									if debug:
-										for shifti in range(0, change['Shift']+1):
-											shift=collated['players'][change['Player']]['THV']['shifts'][shifti]
-											print(str(shifti)+" "+shift['StartEL']+" - "+shift['EndEL']+"   "+str(shift['StartDT'])+" - "+str(shift['EndDT']))
-										print("On at "+str(onice[abv][nhlid]))
-										print(collated['gamePk'])
-										print("      Already in onice!  Fail.")
-									exit(44)
-							else:
-								onice[abv][nhlid]=dt
-
-						for pos in ['away', 'home']:
-							posabv=collated['teams'][pos]['abv']
-							change[posabv]={}
-							change[posabv]['onice']={}
-							for nhlid in onice[posabv]:
-								change[posabv]['onice'][nhlid]=True
-
-						if debug:
-							print("      Adding to remove queue!")
-						play['changes'].append(change)
-						remove.insert(0, changei)
-
-					for changei in remove:
-						if debug:
-							change=toitree[dt][teampos][type][changei]
-							print("      Removing "+change['Team']+" "+str(change['Player'])+" from changes")
-						toitree[dt][teampos][type].pop(changei)
-
-					if len(toitree[dt][teampos][type]) == 0:
-						del(toitree[dt][teampos][type])
-				if len(toitree[dt][teampos]) == 0:
-					del(toitree[dt][teampos])
-			nchanges=len(toitree[dt])
-			if debug:
-				print(str(oldnchanges)+" -> "+str(nchanges))
-			if nchanges == oldnchanges and nchanges > 0:
-				print(json.dumps(play, indent=3))
-				for nhlid in onice[abv]:
-					if str(nhlid) not in play[abv]['onice'] and nhlid not in play[abv]['onice']:
-						print("Exit (<="+str(play['dt'])+"): "+abv+" "+str(nhlid)+" "+collated['players'][int(nhlid)]['Name'])
-				for nhlid in play[abv]['onice']:
-					if str(nhlid) not in onice[abv] and nhlid not in onice[abv]:
-						print("Need (<="+str(play['dt'])+"): "+abv+" "+str(nhlid)+" "+collated['players'][int(nhlid)]['Name'])
-				print("Leftover changes have already been done?")
-				print(collated['gamePk'])
-				exit(3)
-			elif debug:
-				print("   Complete")
-			oldnchanges=nchanges
-		if len(toitree[dt]) == 0:
-			del(toitree[dt])
-
-	if play['dt'] in toitree:
-		if debug:
-			for nhlid in play[abv]['onice']:
-				if str(nhlid) in onice[abv] or nhlid in onice[abv]:
-					print("Stay (  "+str(play['dt'])+"): "+abv+" "+str(nhlid)+" "+collated['players'][int(nhlid)]['Name'])
-			for nhlid in onice[abv]:
-				if str(nhlid) not in play[abv]['onice'] and nhlid not in play[abv]['onice']:
-					print("Exit (="+str(play['dt'])+"): "+abv+" "+str(nhlid)+" "+collated['players'][int(nhlid)]['Name'])
-			for nhlid in play[abv]['onice']:
-				if str(nhlid) not in onice[abv] and nhlid not in onice[abv]:
-					print("Need (="+str(play['dt'])+"): "+abv+" "+str(nhlid)+" "+collated['players'][int(nhlid)]['Name'])
-		dt = play['dt']
-		for teampos in ['away', 'home']:
-			abv=collated['teams'][teampos]['abv']
-			if teampos not in toitree[dt]:
-				continue
-
-			for type in ['off', 'on']:
-				if type not in toitree[dt][teampos]:
-					continue
-
-				remove=[]
-				for changei in range(0, len(toitree[dt][teampos][type])):
-					change=toitree[dt][teampos][type][changei]
-					nhlid=str(change['Player'])
-
-					if type == 'off':
-						if debug:
-							print("   -- "+str(changei)+" "+abv+" "+str(nhlid)+" "+collated['players'][int(nhlid)]['Name'])
-						if nhlid not in onice[abv]:
-							if debug:
-								print("      Not in onice!  Skip.")
-							continue
-						if nhlid in play[abv]['onice']:
-							if debug:
-								#print(json.dumps(change, indent=3))
-								print("      In play onice!  Skip.")
-							continue
-
-						del(onice[abv][nhlid])
-						remove.insert(0, changei)
-
-					elif type == 'on':
-						if debug:
-							#print(json.dumps(collated['players'][int(nhlid)], indent=3))
-							print("   ++ "+str(changei)+" "+abv+" "+str(nhlid)+" "+collated['players'][int(nhlid)]['Name'])
-						if nhlid in onice[abv]:
-							if debug:
-								print("      Already in onice!  Skip.")
-							continue
-						if nhlid not in play[abv]['onice']:
-							if debug:
-								print("      Not in play onice!  Skip.")
-							continue
-
-						if debug:
-							print("      Adding to remove queue!")
-						onice[abv][nhlid]=dt
-						remove.insert(0, changei)
-
-					for pos in ['away', 'home']:
-						posabv=collated['teams'][pos]['abv']
-						change[posabv]={}
-						change[posabv]['onice']={}
-						for nhlid in onice[posabv]:
-							change[posabv]['onice'][nhlid]=True
-					play['changes'].append(change)
-
-				for changei in remove:
-					if debug:
-						change=toitree[dt][teampos][type][changei]
-						print("      Removing "+change['Team']+" "+str(change['Player']))
-					toitree[dt][teampos][type].pop(changei)
-
-				if len(toitree[dt][teampos][type]) == 0:
-					del(toitree[dt][teampos][type])
-			if len(toitree[dt][teampos]) == 0:
-				del(toitree[dt][teampos])
-		if len(toitree[dt]) == 0:
-			del(toitree[dt])
-
-	play['changeevents']=[]
-	start=0
-	while start < len(play['changes']):
-		startchange = play['changes'][start]
-		end = start
-
-		changeevent={}
-		changeevent['PLEvent']="CHANGE"
-		changeevent['LIVEEvent']="Change"
-		changeevent['dt']=startchange['dt']
-		changeevent['Period']=play['Period']
-		changeevent['Elapsed']=undectime(startchange['dt'])
-		changeevent['Remaining']=undectime(ft-startchange['dt'])
-		changeevent['Team']=startchange['Team']
+	if 'onice' not in collated['temp']:
+		collated['temp']['onice']={}
+		for teampos in collated['teams']:
+			abv = collated['teams'][teampos]['abv']
+			collated['temp']['onice'][abv]={}
 	
-		for type in ['on', 'off']:
-			changeevent[type]=[]
-
-		while end < len(play['changes']):
-			endchange = play['changes'][end]
-			if startchange['dt'] != endchange['dt']:
-				break
-			if startchange['Team'] != endchange['Team']:
-				break
-#			if startchange['type'] != endchange['type']:
-#				break
-
-			changeevent[endchange['type']].append(endchange)
-			end = end+1
-
-		play['changeevents'].append(changeevent)
-		for oniceteam in collated['teams']:
-			oniceabv=collated['teams'][oniceteam]['abv']
-			changeevent[oniceabv]={}
-			changeevent[oniceabv]['on']=[]
-			changeevent[oniceabv]['off']=[]
-			changeevent[oniceabv]['stay']=[]
-			changeevent[oniceabv]['onice']={}
-
-			if len(changeevent['on']) > 0:
-				for nhlid in changeevent['on'][-1][oniceabv]['onice']:
-					changeevent[oniceabv]['onice'][str(nhlid)]=startchange['dt']
-
-			elif len(changeevent['off']) > 0:
-				for nhlid in changeevent['off'][-1][oniceabv]['onice']:
-					changeevent[oniceabv]['onice'][str(nhlid)]=startchange['dt']
-
-		for type in ['off', 'on']:
-			for change in changeevent[type]:
-				if type == 'on':
-					collated['players'][change['Player']]['shifts']['THV'][change['Shift']]['StartPlay'] = playi
-				elif type == 'off':
-					collated['players'][change['Player']]['shifts']['THV'][change['Shift']]['EndPlay'] = playi
-				#changeevent[startchange['Team']][type].append(str(change['Player']))
-
-		playi=playi+1
-		start=end
-
-	if debug:
-		for teampos in ['away', 'home']:
-			abv=collated['teams'][teampos]['abv']
-			for nhlid in play[abv]['onice']:
-				print("On ice at end: "+abv+" "+str(nhlid))
-		print("---- merge_toi_one")
-		#sys.stdin.readline()
+	collated=merge_tois(collated, playi)
 
 	return collated
 
-	for play in collated['plays']:
-		process=len(plays)
-		for change in play['changeevents']:
-			plays.append(change)
+def process_change(collated, change, playi=-1):
+	if 'changes' not in collated['plays'][playi]:
+		collated['plays'][playi]['changes']=[]
+	collated['plays'][playi]['changes'].append(change)
 
-		for k in ['changeevents', 'changes']:
-			if k in play:
-				del(play[k])
-		plays.append(play)
+	team=change['Team']
+	nhlid=change['Player']
+	if change['type'] == 'on':
+		print(json.dumps(change, indent=3))
+		collated['temp']['onice'][team][int(nhlid)]=change['dt']
+	elif change['type'] == 'off':
+		del(collated['temp']['onice'][team][int(nhlid)])
+	
+	return collated
 
-		for changeplayi in range(process, len(plays)):
-			changeplay=plays[changeplayi]
+def makeshift(collated, nhlid, dt, shifttype):
+	change={}
+	change['Player']=nhlid
+	change['Team']=collated['players'][int(nhlid)]['Team']
+	for teampos in collated['teams']:
+		abv=collated['teams'][teampos]['abv']
+		if abv == change['Team']:
+			change['TeamPos']=teampos
+			break
+	change['dt']=dt
+	change['type']=shifttype
 
-			if changeplay['PLEvent'] == 'CHANGE':
-				for change in changeplay['off']:
-					abv=change['Team']
-					nhlid=int(change['Player'])
-					del(onice[abv][nhlid])
-				for change in changeplay['on']:
-					abv=change['Team']
-					nhlid=int(change['Player'])
-					onice[abv][nhlid]=changeplay['dt']
+	shift={}
+	shift['Player']=nhlid
+	shift['Team']=change['Team']
+	shift['TeamPos']=change['TeamPos']
+	shift['type']=shifttype
+	shift['Shift']=len(collated['players'][int(nhlid)]['shifts'])
+	shift['generated']=True
+	if shifttype == 'off':
+		shift['EndDT']=dt
+	elif shifttype == 'on':
+		shift['StartDT']=dt
 
-				for abv in onice:
-					changeplay[abv]={}
-					changeplay[abv]['onice']={}
-					for p in onice[abv]:
-						changeplay[abv]['onice'][p]=onice[abv][p]
-			else:
-				errors=[]
-				for abv in onice:
-					keys=list(changeplay[abv])
-					for k in keys:
-						if k != 'onice':
-							del(changeplay[abv][k])
-					for nhlid in onice[abv]:
-						if str(nhlid) in changeplay[abv]['onice']:
-							pass
-						elif int(nhlid) not in changeplay[abv]['onice']:
-							pass
-						else:
-							if 'PL' in changeplay and abv+' On Ice' in changeplay['PL']:
-								print(changeplay['PL'][abv+' On Ice'])
-							if 'PL' in changeplay and abv+' On Ice' in changeplay['PL']:
-								print(changeplay['PL'][abv+' On Ice'])
-							errors.append(nhlid)
-				if len(errors) > 0:
-					print(json.dumps(changeplay, indent=3))
-					for abv in onice:
-						for nhlid in onice[abv]:
-							print(str(nhlid)+" -- "+collated['players'][nhlid]['Name'])
-					for nhlid in errors:
-						print(" -- "+str(nhlid)+" is unknown")
-					print(collated['gamePk'])
-					exit(33)
+	print_shifts(collated, nhlid)
+	if shifttype == 'off':
+		for shifti in range(len(collated['players'][int(nhlid)]['shifts'])-1, -1, -1):
+			shift=collated['players'][int(nhlid)]['shifts'][shifti]
+			if 'EndDT' not in shift and shift['StartDT'] <= dt:
+				collated['players'][int(nhlid)]['shifts'][shifti]['EndDT']=dt
+				change['Shift']=shifti
+				return (collated, change)
 
-			plays[changeplayi]=changeplay
+	change['Shift']=len(collated['players'][int(nhlid)]['shifts'])
+	collated['players'][int(nhlid)]['shifts'].append(shift)
 
-	collated['plays']=plays
+	return (collated, change)
+	
+def merge_tois(collated, playi=None):
+	debug=False
+	play=None
+	if playi is not None:
+		play=collated['plays'][playi]
+
+	for dt in sorted(list(collated['temp']['toi'])):
+		if play is not None and dt >= play['dt']:
+			break
+
+		if debug:
+			if dt is None:
+				print("   XX END")
+			elif dt < play['dt']:
+				print("   << "+str(dt))
+
+		done=1
+		while done > 0:
+			done=0
+			process=[]
+			for changei in range(0, len(collated['temp']['toi'][dt])):
+				change=collated['temp']['toi'][dt][changei]
+				if change['type'] == 'on' and change['Player'] in collated['temp']['onice'][change['Team']]:
+					if debug:
+						print("      Skip: "+change['type']+": "+str(change['Player']))
+					process.append(change)
+					continue
+
+				if change['type'] == 'off' and change['Player'] not in collated['temp']['onice'][change['Team']]:
+					if debug:
+						print("      Skip: "+change['type']+": "+str(change['Player']))
+					process.append(change)
+					continue
+
+				if debug:
+					print("      "+change['type']+": "+str(change['Player']))
+				collated=process_change(collated, change, playi)
+				done=done+1
+
+			collated['temp']['toi'][dt]=process
+
+		if len(collated['temp']['toi'][dt]) == 0:
+			del(collated['temp']['toi'][dt])
+		else:
+			for shift in collated['temp']['toi'][dt]:
+				print_shifts(collated, shift['Player'])
+				print(json.dumps(shift, indent=3))
+			exit(37)
+	
+	if play['dt'] in collated['temp']['toi']:
+		if debug:
+			print("   == "+str(play['dt'])+" ("+str(play)+")")
+
+		off=[]
+		on=[]
+		stay=[]
+		for teampos in ['away', 'home']:
+			abv=collated['teams'][teampos]['abv']
+			for nhlid in play[abv]['onice']:
+				if int(nhlid) not in collated['temp']['onice'][abv]:
+					on.append(nhlid)
+				else:
+					stay.append(nhlid)
+
+		for teampos in ['away', 'home']:
+			abv=collated['teams'][teampos]['abv']
+			for nhlid in collated['temp']['onice'][abv]:
+				if str(nhlid) not in play[abv]['onice']:
+					off.append(nhlid)
+
+		if debug:
+			for nhlid in stay:
+				print("      == "+str(nhlid))
+
+		for nhlid in off:
+			print("      -- "+str(nhlid))
+			generate=True
+			usechange=None
+			for changei in range(0, len(collated['temp']['toi'][play['dt']])):
+				change=collated['temp']['toi'][play['dt']][changei]
+				if int(change['Player']) == int(nhlid) and change['type'] == 'off':
+					usechange=change
+					generate=False
+					play['changes'].append(change)
+					collated['temp']['toi'][play['dt']].pop(changei)
+					break
+
+			if generate:
+				(collated, usechange)=makeshift(collated, nhlid, play['dt'], 'off')
+				if debug:
+					print("         Generated change")
+			elif debug:
+				print("         Found change")
+
+			collated=process_change(collated, usechange, playi)
+
+		for nhlid in on:
+			print("      ++ "+str(nhlid))
+			generate=True
+			usechange=None
+			for changei in range(0, len(collated['temp']['toi'][play['dt']])):
+				change=collated['temp']['toi'][play['dt']][changei]
+				if int(change['Player']) == int(nhlid) and change['type'] == 'on':
+					usechange=change
+					generate=False
+					play['changes'].append(change)
+					collated['temp']['toi'][play['dt']].pop(changei)
+					break
+
+			if generate:
+				(collated, usechange)=makeshift(collated, nhlid, play['dt'], 'on')
+				if debug:
+					print("         Generated change")
+			elif debug:
+				print("         Found change")
+
+			collated=process_change(collated, usechange, playi)
+
+		if len(collated['temp']['toi'][play['dt']]) == 0:
+			del(collated['temp']['toi'][play['dt']]) 
 
 	return collated
 
@@ -3377,8 +3344,8 @@ def merge_pl_live_one(data, collated, playi, start=0):
 		return play
 
 	if 'PLEvent' not in play:
-		print("No PL in play")
 		print(collated['gamePk'])
+		print("No PL in play")
 		exit(1)
 
 	if play['PLEvent'] == 'ANTHEM':
@@ -3640,8 +3607,10 @@ def merge_pl_live_one(data, collated, playi, start=0):
 def undectime(time):
 	s=int(time) % 60
 	m=int((time-s)/60)
+	p = int(m/20)+1
 	m=m % 20
-	return "{m:02}:{s:02}".format(m=m, s=s)
+
+	return "{p} {m:02}:{s:02}".format(p=p, m=m, s=s)
 
 def decimaltime(time, period=0):
 	ra=re.split(':', time)
@@ -3656,6 +3625,9 @@ def decimaltime(time, period=0):
 			t=t+(int(ra[-1])*20)
 		ra.pop()
 		n=n+1
+	
+	if str(period) == "SO":
+		period=5
 
 	if period != 0:
 		period=float(period)
@@ -3697,10 +3669,10 @@ def process_game(game):
 		newdata=collate(data)
 
 	if newdata is not None:
-		newdata['version']=1
+		newdata['version']=2
 
 		try:
-			if len(data['PL']) > 0 and (data['PL'][-1]['Event'] == "GEND" or data['PL'][-1]['Event'] == "GOFF"):
+			if len(data['PL']) > 0 and (data['PL'][-1]['Event'] == "GEND" or data['PL'][-1]['Event'] == "GOFF" or data['PL'][-1]['Event'] == "EGPID"):
 				newdata['status']="Final"
 			else:
 				newdata['status']="Ongoing"
@@ -3714,8 +3686,8 @@ def process_game(game):
 					print(str(data['PXP']['gameState'])+" == OFF/FINAL")
 					print(str(data['PXP']['gameScheduleState'])+" == OK")
 					print(str(data['PL'][-1]['Event'])+" == GEND/GOFF")
-					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == game-end")
-					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 527")
+					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == shootout-complete/game-end")
+					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 523, 524, 527")
 					print(str(data['PXP']['clock']['running'])+" == false")
 					print(str(data['PXP']['clock']['inIntermission'])+" == false")
 					print("Game: "+str(newdata['GAME']['gamePk']))
@@ -3727,22 +3699,22 @@ def process_game(game):
 					print(str(data['PXP']['gameState'])+" == OFF/FINAL")
 					print(str(data['PXP']['gameScheduleState'])+" == OK")
 					print(str(data['PL'][-1]['Event'])+" == GEND/GOFF")
-					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == game-end")
-					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 527")
+					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == shootout-complete/game-end")
+					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 523, 524, 527")
 					print(str(data['PXP']['clock']['running'])+" == false")
 					print(str(data['PXP']['clock']['inIntermission'])+" == false")
 					print("Game: "+str(newdata['GAME']['gamePk']))
 					exit(5)
 				newdata['status']="Ongoing"
 
-			if len(data['PXP']['plays']) > 0 and data['PXP']['plays'][-1]['typeDescKey'] == 'game-end':
+			if len(data['PXP']['plays']) > 0 and (data['PXP']['plays'][-1]['typeDescKey'] == 'game-end' or data['PXP']['plays'][-1]['typeDescKey'] == 'shootout-complete'):
 				print("Final by last play typeDescKey")
 				if 'status' in newdata and newdata['status'] == 'Ongoing':
 					print(str(data['PXP']['gameState'])+" == OFF/FINAL")
 					print(str(data['PXP']['gameScheduleState'])+" == OK")
 					print(str(data['PL'][-1]['Event'])+" == GEND/GOFF")
-					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == game-end")
-					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 527")
+					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == shootout-complete/game-end")
+					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 523, 524, 527")
 					print(str(data['PXP']['clock']['running'])+" == false")
 					print(str(data['PXP']['clock']['inIntermission'])+" == false")
 					print("Game: "+str(newdata['GAME']['gamePk']))
@@ -3754,22 +3726,22 @@ def process_game(game):
 					print(str(data['PXP']['gameState'])+" == OFF/FINAL")
 					print(str(data['PXP']['gameScheduleState'])+" == OK")
 					print(str(data['PL'][-1]['Event'])+" == GEND/GOFF")
-					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == game-end")
-					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 527")
+					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == shootout-complete/game-end")
+					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 523, 524, 527")
 					print(str(data['PXP']['clock']['running'])+" == false")
 					print(str(data['PXP']['clock']['inIntermission'])+" == false")
 					print("Game: "+str(newdata['GAME']['gamePk']))
 					exit(5)
 				newdata['status']="Ongoing"
 
-			if len(data['PXP']['plays']) > 0 and data['PXP']['plays'][-1]['typeCode'] == 524:
+			if len(data['PXP']['plays']) > 0 and (data['PXP']['plays'][-1]['typeCode'] == 523 or data['PXP']['plays'][-1]['typeCode'] == 524 or data['PXP']['plays'][-1]['typeCode'] == 527):
 				print("Final by last play typeCode")
 				if 'status' in newdata and newdata['status'] == 'Ongoing':
 					print(str(data['PXP']['gameState'])+" == OFF/FINAL")
 					print(str(data['PXP']['gameScheduleState'])+" == OK")
 					print(str(data['PL'][-1]['Event'])+" == GEND/GOFF")
-					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == game-end")
-					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 527")
+					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == shootout-complete/game-end")
+					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 523, 524, 527")
 					print(str(data['PXP']['clock']['running'])+" == false")
 					print(str(data['PXP']['clock']['inIntermission'])+" == false")
 					print("Game: "+str(newdata['GAME']['gamePk']))
@@ -3781,8 +3753,8 @@ def process_game(game):
 					print(str(data['PXP']['gameState'])+" == OFF/FINAL")
 					print(str(data['PXP']['gameScheduleState'])+" == OK")
 					print(str(data['PL'][-1]['Event'])+" == GEND/GOFF")
-					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == game-end")
-					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 527")
+					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == shootout-complete/game-end")
+					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 523, 524, 527")
 					print(str(data['PXP']['clock']['running'])+" == false")
 					print(str(data['PXP']['clock']['inIntermission'])+" == false")
 					print("Game: "+str(newdata['GAME']['gamePk']))
@@ -3858,7 +3830,7 @@ def final_game(game):
 		pass
 
 	try:
-		if game['status'] == 'Final' and game['version'] == 1:
+		if game['status'] == 'Final' and game['version'] == 2:
 			return True
 	except KeyError as e:
 		print(e)
