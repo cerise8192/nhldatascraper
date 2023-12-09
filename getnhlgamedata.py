@@ -2852,6 +2852,7 @@ def merge_toi_one(collated, playi):
 			break
 		if debug:
 			print(str(dt))
+		strengthstart=len(play['changes'])
 		for teampos in ['away', 'home']:
 			if teampos not in collated['temp']['toi'][dt]:
 				continue
@@ -2912,12 +2913,27 @@ def merge_toi_one(collated, playi):
 					for nhlid in collated['temp']['onice'][oniceabv]:
 						change[oniceabv]['onice'][int(nhlid)]=collated['temp']['onice'][oniceabv][nhlid]
 				play['changes'].append(change)
+		for changei in range(strengthstart, len(play['changes'])):
+			strength=[]
+			if play['changes'][changei]['TeamPos'] == 'home':
+				strength.insert(0, collated['teams']['home']['abv'])
+				strength.insert(1, collated['teams']['away']['abv'])
+			elif play['changes'][changei]['TeamPos'] == 'away':
+				strength.insert(0, collated['teams']['away']['abv'])
+				strength.insert(1, collated['teams']['home']['abv'])
+			else:
+				print("Unknown teampos: "+play['changes'][changei]['TeamPos'])
+				exit(81)
+			strength[0]=len(list(collated['temp']['onice'][strength[0]]))
+			strength[1]=len(list(collated['temp']['onice'][strength[1]]))
+			play['changes'][changei]['Strength']=str(strength[0])+'v'+str(strength[1])
 		if len(list(collated['temp']['toi'][dt])) == 0:
 			del(collated['temp']['toi'][dt])
 
 	if play['dt'] in collated['temp']['toi']:
 		if debug:
 			print(str(play['dt'])+" == ")
+		strengthstart=len(play['changes'])
 		for teampos in ['away', 'home']:
 			if teampos not in collated['temp']['toi'][play['dt']]:
 				continue
@@ -2984,6 +3000,7 @@ def merge_toi_one(collated, playi):
 				if int(nhlid) not in collated['temp']['onice'][change['Team']]:
 					#generate
 					pass
+
 			if len(change['on']) > 0 or len(change['off']) > 0:
 				for oniceteam in ['away', 'home']:
 					oniceabv=collated['teams'][oniceteam]['abv']
@@ -2994,6 +3011,21 @@ def merge_toi_one(collated, playi):
 				play['changes'].append(change)
 			if len(list(collated['temp']['toi'][play['dt']][teampos])) == 0:
 				del(collated['temp']['toi'][play['dt']][teampos])
+
+		for changei in range(strengthstart, len(play['changes'])):
+			strength=[]
+			if play['changes'][changei]['TeamPos'] == 'home':
+				strength.insert(0, collated['teams']['home']['abv'])
+				strength.insert(1, collated['teams']['away']['abv'])
+			elif play['changes'][changei]['TeamPos'] == 'away':
+				strength.insert(0, collated['teams']['away']['abv'])
+				strength.insert(1, collated['teams']['home']['abv'])
+			else:
+				print("Unknown teampos: "+play['changes'][changei]['TeamPos'])
+				exit(82)
+			strength[0]=len(list(collated['temp']['onice'][strength[0]]))
+			strength[1]=len(list(collated['temp']['onice'][strength[1]]))
+			play['changes'][changei]['Strength']=str(strength[0])+'v'+str(strength[1])
 		if len(list(collated['temp']['toi'][play['dt']])) == 0:
 			del(collated['temp']['toi'][play['dt']])
 	
@@ -3561,7 +3593,7 @@ def process_game(game):
 		newdata=collate(data)
 
 	if newdata is not None:
-		newdata['version']=1
+		newdata['version']=2
 
 		try:
 			if len(data['PL']) > 0 and (data['PL'][-1]['Event'] == "GEND" or data['PL'][-1]['Event'] == "GOFF" or data['PL'][-1]['Event'] == "EGPID"):
@@ -3722,7 +3754,7 @@ def final_game(game):
 		pass
 
 	try:
-		if game['status'] == 'Final' and game['version'] == 1:
+		if game['status'] == 'Final' and game['version'] == 2:
 			return True
 	except KeyError as e:
 		print(e)
