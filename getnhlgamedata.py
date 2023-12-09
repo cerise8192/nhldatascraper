@@ -3722,7 +3722,7 @@ def final_game(game):
 		pass
 
 	try:
-		if False and game['status'] == 'Final' and game['version'] == 1:
+		if game['status'] == 'Final' and game['version'] == 1:
 			return True
 	except KeyError as e:
 		print(e)
