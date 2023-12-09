@@ -78,7 +78,9 @@ def read_game(season, season_type, gamenum):
 	return game
 
 def makelineinfo(game, team, linekey):
-	print("Make lineinfo for "+linekey)
+	debug=True
+	if debug:
+		print("   New line!  "+linekey)
 	lineinfo={}
 	lineinfo['key']=linekey
 	lineinfo['team']=team
@@ -87,21 +89,36 @@ def makelineinfo(game, team, linekey):
 	game['lines']['line'][linekey]=lineinfo
 	game=make_positions(game, linekey)
 	game=break_line(game, linekey)
+
+	lineinfo=game['lines']['line'][linekey]
+	for part in ['fline', 'dline', 'goalie']:
+		if lineinfo[part+'key'] not in game['lines'][part]:
+			partlineinfo={}
+			partlineinfo['strid']=lineinfo[part+'strid']
+			partlineinfo['str']=lineinfo[part+'str']
+			partlineinfo['key']=lineinfo[part+'key']
+			partlineinfo['team']=team
+			partlineinfo['shifts']=[]
+			partlineinfo['toi']=0
+			game['lines'][part][lineinfo[part+'key']]=partlineinfo
 	return game
 
 def end_line(game, oldshifti, newshifti, playi):
+	debug=True
 	if oldshifti is None:
 		return game
 
 	play = game['plays'][playi]
-	oldshift = game['lines']['shifts'][oldshifti]
-	print("   Ending "+oldshift['key'])
+	oldshift = game['lines']['shifts']['line'][oldshifti]
+	if debug:
+		print("   Ending "+oldshift['key'])
+
 	oldshift['end']=playi
 	oldshift['enddt']=play['dt']
 	oldshift['toi']=oldshift['enddt']-oldshift['startdt']
 	if newshifti is not None:
 		oldshift['next']=newshifti
-	game['lines']['shifts'][oldshifti]=oldshift
+	game['lines']['shifts']['line'][oldshifti]=oldshift
 
 	key=oldshift['key']
 	game['lines']['line'][key]['toi']=game['lines']['line'][key]['toi']+oldshift['toi']
@@ -168,6 +185,10 @@ def make_positions(game, linekey, oldpositions={}):
 	return game
 
 def start_line(game, oldshifti, newshifti, playi, linekey):
+	debug=True
+	if debug:
+		print("   Starting "+linekey)
+
 	play=game['plays'][playi]
 
 	shift={}
@@ -176,10 +197,9 @@ def start_line(game, oldshifti, newshifti, playi, linekey):
 	shift['key']=linekey
 	if oldshifti is not None:
 		shift['last']=oldshifti
-	print("   Starting "+shift['key'])
-	game['lines']['shifts'].insert(newshifti, shift)
-
+	game['lines']['shifts']['line'].insert(newshifti, shift)
 	game['lines']['line'][linekey]['shifts'].append(newshifti)
+
 	return game
 
 def get_name(game, nhlid):
@@ -195,7 +215,7 @@ def break_line(game, linekey):
 	positions=lineinfo['positions']
 
 	if 'pretty' in lineinfo:
-		if 'MakeC' in lineinfo and lineinfo['positions']['C'][0] == lineinfo['MakeC']:
+		if 'MakeC' in lineinfo and len(lineinfo['positions']['C']) > 0 and lineinfo['positions']['C'][0] == lineinfo['MakeC']:
 			return game
 		del(lineinfo['pretty'])
 
@@ -237,10 +257,10 @@ def break_line(game, linekey):
 	
 	for have in list(surplus):
 		n=len(positions[have])
-		for playeri in range(len(positions[have])-1, -1, -1):
-			if n == 1:
-				break
+		if n == 1:
+			continue
 
+		for playeri in range(len(positions[have])-1, -1, -1):
 			nhlid=positions[have][playeri]
 			player=game['players'][nhlid]
 			if 'Hand' not in player:
@@ -253,12 +273,14 @@ def break_line(game, linekey):
 					positions[have].pop(playeri)
 					del(deficit['LD'])
 					n=n-1
+					break
 				elif 'RD' in deficit and player['Hand'] == 'R':
 					print("   "+get_name(game, nhlid)+" -> RD by hand & D")
 					positions['RD'].append(nhlid)
 					positions[have].pop(playeri)
 					del(deficit['RD'])
 					n=n-1
+					break
 			elif have != 'G':
 				if 'LW' in deficit and player['Hand'] == 'L':
 					print("   "+get_name(game, nhlid)+" -> LW by hand & F")
@@ -266,12 +288,14 @@ def break_line(game, linekey):
 					positions[have].pop(playeri)
 					del(deficit['LW'])
 					n=n-1
+					break
 				elif 'RW' in deficit and player['Hand'] == 'R':
 					print("   "+get_name(game, nhlid)+" -> RW by hand & F")
 					positions['RW'].append(nhlid)
 					positions[have].pop(playeri)
 					del(deficit['RW'])
 					n=n-1
+					break
 
 	for have in list(surplus):
 		n=len(positions[have])
@@ -287,12 +311,14 @@ def break_line(game, linekey):
 					positions[have].pop(playeri)
 					del(deficit['LD'])
 					n=n-1
+					break
 				elif 'RD' in deficit:
 					print("   "+get_name(game, nhlid)+" -> RD by D")
 					positions['RD'].append(nhlid)
 					positions[have].pop(playeri)
 					del(deficit['RD'])
 					n=n-1
+					break
 			elif have != 'G':
 				if 'LW' in deficit:
 					print("   "+get_name(game, nhlid)+" -> LW by F")
@@ -300,25 +326,28 @@ def break_line(game, linekey):
 					positions[have].pop(playeri)
 					del(deficit['LW'])
 					n=n-1
+					break
 				elif 'RW' in deficit:
 					print("   "+get_name(game, nhlid)+" -> RW by F")
 					positions['RW'].append(nhlid)
 					positions[have].pop(playeri)
 					del(deficit['RW'])
 					n=n-1
+					break
 				elif 'C' in deficit:
 					print("   "+get_name(game, nhlid)+" -> C by F")
 					positions['C'].append(nhlid)
 					positions[have].pop(playeri)
 					del(deficit['C'])
 					n=n-1
+					break
 
 	for have in list(surplus):
 		n=len(positions[have])
-		for playeri in range(len(positions[have])-1, -1, -1):
-			if n == 1:
-				break
+		if n == 1:
+			continue
 
+		for playeri in range(len(positions[have])-1, -1, -1):
 			nhlid=positions[have][playeri]
 			player=game['players'][nhlid]
 			if 'Hand' not in player:
@@ -338,24 +367,26 @@ def break_line(game, linekey):
 				positions[have].pop(playeri)
 				del(deficit[pos])
 				n=n-1
+				break
 
 	for have in list(surplus):
 		n=len(positions[have])
-		for playeri in range(len(positions[have])-1, -1, -1):
-			if n == 1:
-				break
+		if n <= 1:
+			continue
 
+		for playeri in range(len(positions[have])-1, -1, -1):
 			nhlid=positions[have][playeri]
 			player=game['players'][nhlid]
 
 			for pos in list(positions):
-				if pos not in deficit:
+				if pos not in deficit or len(positions) >= 1:
 					continue
 				print("   "+get_name(game, nhlid)+" -> "+pos+" by Need")
 				positions[pos].append(nhlid)
 				positions[have].pop(playeri)
 				del(deficit[pos])
 				n=n-1
+				break
 
 	lineinfo['balanced']=positions
 	
@@ -396,7 +427,7 @@ def break_line(game, linekey):
 				dline.append(positions[pos][i])
 			else:
 				fline.append(positions[pos][i])
-			line.append(surplus[-1])
+			line.append(positions[pos][i])
 	
 	lineinfo['linestrid']=','.join(line)
 	lineinfo['flinestrid']=','.join(fline)
@@ -447,16 +478,46 @@ def break_line(game, linekey):
 
 	return game
 
+def part_line(game, oldshifti, newshifti, playi):
+	newinfo=game['lines']['line'][linekey]
+		
+	for part in ['fline', 'dline', 'goalie']:
+		if oldshifti is not None:
+			oldshift=game['lines']['shifts']['line'][oldshifti]
+			oldinfo=game['lines']['line'][oldshift['key']]
+			if oldinfo[part+'key'] == newinfo[part+'key']:
+				continue
+			oldshift=game['lines']['shifts'][part][oldshifti]
+
+	#lineinfo['flinestrid']
+	#lineinfo['dlinestrid']
+	#lineinfo['goaliestrid']
+	#lineinfo['flinekey']
+	#lineinfo['dlinekey']
+	#lineinfo['goaliekey']
+	#lineinfo['flinestr']
+	#lineinfo['dlinestr']
+	#lineinfo['goaliestr']
+
+
+
+
 def add_lines(game):
+	debug=True
 	if 'lines' not in game:
 		game['lines']={}
 		game['lines']['last']={}
-		game['lines']['line']={}
-		game['lines']['shifts']=[]
+		game['lines']['shifts']={}
+		for part in ['line', 'fline', 'dline', 'goalie']:
+			game['lines']['last'][part]={}
+			game['lines'][part]={}
+			game['lines']['shifts'][part]=[]
 
 	for playi in range(0, len(game['plays'])):
 		play=game['plays'][playi]
-		print(str(play['dt'])+" - "+play['PLEvent'])
+		if debug:
+			print(str(play['dt'])+" - "+play['PLEvent'])
+
 		if play['PLEvent'] == 'CHANGE':
 			team=play['Team']
 			linera=sorted(list(play[team]['onice']))
@@ -465,12 +526,50 @@ def add_lines(game):
 				game=makelineinfo(game, team, linekey)
 
 			oldshifti=None
-			if team in game['lines']['last']:
-				oldshifti=game['lines']['last'][team]
-			newshifti=len(game['lines']['shifts'])
+			if team in game['lines']['last']['line']:
+				oldshifti=game['lines']['last']['line'][team]
+			newshifti=len(game['lines']['shifts']['line'])
 			game=end_line(game, oldshifti, newshifti, playi)
 			game=start_line(game, oldshifti, newshifti, playi, linekey)
-			game['lines']['last'][team]=newshifti
+			game['lines']['last']['line'][team]=newshifti
+				
+			for part in ['fline', 'dline', 'goalie']:
+				newlineshift=game['lines']['shifts']['line'][newshifti]
+				newlinekey=newlineshift['key']
+				newlineinfo=game['lines']['line'][newlinekey]
+				if team in game['lines']['last'][part]:
+					oldlineshift=game['lines']['shifts']['line'][oldshifti]
+					oldlinekey=oldlineshift['key']
+					oldlineinfo=game['lines']['line'][oldlinekey]
+
+					if oldlineinfo[part+'key'] == newlineinfo[part+'key']:
+						continue
+
+					oldpartshifti=game['lines']['last'][part][team]
+					oldpartshift=game['lines']['shifts'][part][oldpartshifti]
+					if debug:
+						print("   Ending "+part+" "+oldpartshift['key'])
+
+					oldpartshift['enddt']=play['dt']
+					oldpartshift['end']=playi
+					oldpartshift['toi']=oldpartshift['enddt']-oldpartshift['startdt']
+					game['lines']['shifts'][part][oldpartshifti]=oldpartshift
+
+					oldpartinfo=game['lines'][part][oldpartshift['key']]
+					oldpartinfo['toi']=oldpartinfo['toi']+oldpartshift['toi']
+					game['lines'][part][oldpartshift['key']]=oldpartinfo
+
+				newshift={}
+				newshift['key']=newlineinfo[part+'key']
+				if debug:
+					print("   Starting "+part+" "+newshift['key'])
+				newshift['startdt']=play['dt']
+				newshift['start']=playi
+				newshift['toi']=0
+				newshifti=len(game['lines']['shifts'][part])
+				game['lines']['shifts'][part].insert(newshifti, newshift)
+				game['lines']['last'][part][team]=newshifti
+				game['lines'][part][newshift['key']]['shifts'].append(newshifti)
 
 		elif play['PLEvent'] == 'FAC':
 			for teampos in game['teams']:
@@ -478,11 +577,11 @@ def add_lines(game):
 				fotype=None
 
 				abv=game['teams'][teampos]['abv']
-				if abv not in game['lines']['last']:
+				if abv not in game['lines']['last']['line']:
 					continue
 
-				curshifti=game['lines']['last'][abv]
-				curshift=game['lines']['shifts'][curshifti]
+				curshifti=game['lines']['last']['line'][abv]
+				curshift=game['lines']['shifts']['line'][curshifti]
 				lineinfo=game['lines']['line'][curshift['key']]
 				if 'faceoffs' not in lineinfo:
 					lineinfo['faceoffs']={}
@@ -536,13 +635,13 @@ def add_lines(game):
 
 				maxfos=lineinfo['faceoffs']['ALL'][fotaker]
 				maxplayer=fotaker
-				for p in lineinfo['positions'][foplayer['Position']]:
-					if p not in lineinfo['faceoffs']['ALL']:
-						continue
-
-					if lineinfo['faceoffs']['ALL'][p] > maxfos:
-						maxfos=lineinfo['faceoffs']['ALL'][p]
-						maxplayer=p
+#				for p in lineinfo['positions'][foplayer['Position']]:
+#					if p not in lineinfo['faceoffs']['ALL']:
+#						continue
+#
+#					if lineinfo['faceoffs']['ALL'][p] > maxfos:
+#						maxfos=lineinfo['faceoffs']['ALL'][p]
+#						maxplayer=p
 
 				game['lines']['line'][curshift['key']]=lineinfo
 

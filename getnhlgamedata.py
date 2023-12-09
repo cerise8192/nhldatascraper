@@ -1851,6 +1851,7 @@ def fixgames(data):
 			if pxpentry['id'] == 8477215:
 				data['PXP']['summary']['gameInfo']['awayTeam']['scratches'].pop(i)
 				print("   Removed PXP")
+				break
 		pxpentry={}
 		pxpentry['teamId']=23
 		pxpentry['playerId']=8477967
@@ -3560,7 +3561,7 @@ def process_game(game):
 		newdata=collate(data)
 
 	if newdata is not None:
-		newdata['version']=0
+		newdata['version']=1
 
 		try:
 			if len(data['PL']) > 0 and (data['PL'][-1]['Event'] == "GEND" or data['PL'][-1]['Event'] == "GOFF" or data['PL'][-1]['Event'] == "EGPID"):
@@ -3721,7 +3722,7 @@ def final_game(game):
 		pass
 
 	try:
-		if False and game['status'] == 'Final' and game['version'] == 0:
+		if False and game['status'] == 'Final' and game['version'] == 1:
 			return True
 	except KeyError as e:
 		print(e)
