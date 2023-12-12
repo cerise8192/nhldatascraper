@@ -1931,6 +1931,55 @@ def collate(data):
 	#collated['data']=data
 	return collated
 
+def find_player_ro(data, team, num, name):
+	found=[]
+	for k in ['rosters', 'scratches']:
+		for i in range(0, len(data['RO'][k])):
+			for j in range(0, len(data['RO'][k][i])):
+				roentry=data['RO'][k][i][j]
+				if str(roentry['Name']).upper() == name.upper() and roentry['Team'] == team:
+					found.insert(0, ("RO", k, i, j))
+	return found
+
+def find_player_pxp(data, team, num, name):
+	found=[]
+	for teampos in ['awayTeam', 'homeTeam']:
+		if data['PXP'][teampos]['abbrev'] != team:
+			continue
+
+		for i in range(0, len(data['PXP']['summary']['gameInfo'][teampos]['scratches'])):
+			pxpentry=data['PXP']['summary']['gameInfo'][teampos]['scratches'][i]
+			pxpname=""
+			if type(pxpentry['firstName']) == type({}):
+				pxpname=pxpentry['firstName']['default']
+			else:
+				pxpname=pxpentry['firstName']
+
+			if type(pxpentry['lastName']) == type({}):
+				pxpname=pxpname+" "+pxpentry['lastName']['default']
+			else:
+				pxpname=pxpname+" "+pxpentry['lastName']
+
+			if pxpname.upper() == name.upper():
+				found.insert(0, ("PXP", teampos, 'scratches', i))
+
+		for i in range(0, len(data['PXP']['rosterSpots'])):
+			pxpentry=data['PXP']['rosterSpots'][i]
+			pxpname=""
+			if type(pxpentry['firstName']) == type({}):
+				pxpname=pxpentry['firstName']['default']
+			else:
+				pxpname=pxpentry['firstName']
+
+			if type(pxpentry['lastName']) == type({}):
+				pxpname=pxpname+" "+pxpentry['lastName']['default']
+			else:
+				pxpname=pxpname+" "+pxpentry['lastName']
+
+			if pxpname.upper() == name.upper():
+				found.insert(0, ("PXP", 'rosterSpots', i))
+	return found
+
 def rm_player(data, name):
 	namera=re.split('\s+', name)
 	team=namera.pop(0)
@@ -1940,6 +1989,18 @@ def rm_player(data, name):
 			namera[i]=namera[i].lower()
 			namera[i][0]=namera[i][0].upper()
 	name=' '.join(namera)
+
+	for pathtuple in find_player_ro(data, team, num, name):
+		if pathtuple[0] == 'RO':
+			data[pathtuple[0]][pathtuple[1]][pathtuple[2]].pop(pathtuple[3])
+
+	for pathtuple in find_player_pxp(data, team, num, name):
+		if pathtuple[0] == 'PXP':
+			if len(pathtuple) == 3:
+				data[pathtuple[0]][pathtuple[1]].pop(pathtuple[2])
+			elif len(pathtuple) == 4:
+				data[pathtuple[0]]['summary']['gameInfo'][pathtuple[1]][pathtuple[2]].pop(pathtuple[3])
+	return data
 
 	for k in ['rosters', 'scratches']:
 		for i in range(0, len(data['RO'][k])):
@@ -2101,7 +2162,8 @@ def fixgames(data):
 		#pxpentry['lastName']={}
 		#pxpentry['lastName']['default']="Porco"
 		#data['PXP']['rosterSpots'].append(pxpentry)
-
+	elif int(data['GAME']['gamePk']) == 2021010006:
+		data=add_player(data, "NYI #64 Alex Jefferies", 8482154, pos="L", scratch=False)
 
 	return data
 
@@ -3000,7 +3062,7 @@ def get_onice_one(collated, playi):
 							if nf in collated['lookup']['players']:
 								print(str(nf)+" -> "+str(collated['lookup']['players'][nf]))
 						print("No lookup for "+n)
-						print(json.dumps(collated, indent=3))
+						print("Game: "+str(collated['GAME']['gamePk']))
 						exit(132)
 
 					if debug:
