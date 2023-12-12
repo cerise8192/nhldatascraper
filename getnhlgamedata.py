@@ -10,6 +10,7 @@ import re
 import math
 from unidecode import unidecode
 from bs4 import BeautifulSoup,NavigableString,Tag
+from websockets.sync.client import connect
 
 def penalty_type(text):
 	types=['Abuse of officials', 'Abusive language', 'Aggressor', 'Bench', 'Boarding', 'Broken stick', 'Butt ending', 'Charging', 'Clipping', 'Closing hand on puck', 'Covering puck in crease', 'Cross checking', 'Cross-checking', 'Delay Game', 'Delay Game - Bench - FO Viol', 'Delay Game - Bench - FO viol', 'Delay Game - Equipment', 'Delay Game - FO Viol - hand', 'Delay Game - Goalie - restrict', 'Delay Game - Puck over glass', 'Delay Game - Smothering puck', 'Delay Game - Unsucc chlg', 'Delay Game - Unsucc chlg', 'Elbowing', 'Embellishment', 'Fighting', 'Game Misconduct', 'Game Misconduct - Head coach', 'Goalkeeper displaced net', 'Goalie leave crease', 'Hi stick', 'Hi-sticking', 'High-sticking', 'Holding', 'Holding stick', 'Holding the stick', 'Hooking', 'Illegal check to head', 'Illegal stick', 'Instigator', 'Interference', 'Interference on goalkeeper', 'Kneeing', 'Match [Pp]enalty', 'Minor', 'Misconduct', "Playing without a helmet", "Puck thrown fwd - Goalkeeper", "Removing opponent's helmet", 'Roughing', 'Roughing - Removing opp helmet', 'Slash', 'Slashing', 'Spearing', 'Throwing equipment', 'Throwing stick', 'Throw object at puck', 'Too many men/ice', 'Tripping', 'Unsportsmanlike conduct']
@@ -366,6 +367,90 @@ def get_livedata(game):
 		exit(41)
 	return livedata
 
+
+def get_edge_card(nhlid):
+	build={}
+	build['type']='action'
+	build['event']={}
+
+	build['event']['domain']='edge.nhl.com'
+	build['event']['uri']="/en/skater/"+str(nhlid)
+	build['event']['action']='load'
+
+	build['event']['data']={}
+	build['event']['data']['callbackFunction']="initializeDataElements"
+	build['event']['data']['renderFunction']="renderPlayerCard"
+	build['event']['data']['target']="#profile-playercard"
+
+	build['event']['data']['params']={}
+	build['event']['data']['params']['player']=str(nhlid)
+	build['event']['data']['params']['rootName']="skatersProfiles"
+	build['event']['data']['params']['source']="players"
+	build['event']['data']['params']['type']="skaters"
+
+	return build
+
+def get_edge_profile_player(nhlid):
+	build={}
+	build['type']='action'
+	build['event']={}
+
+	build['event']['domain']='edge.nhl.com'
+	build['event']['uri']="/en/skater/"+str(nhlid)
+	build['event']['action']='load'
+
+	build['event']['data']={}
+	build['event']['data']['callbackFunction']="initializeDataElements"
+	build['event']['data']['renderFunction']="renderProfilePlayerSection"
+	build['event']['data']['target']="#profile-section"
+
+	build['event']['data']['params']={}
+	build['event']['data']['params']['player']=str(nhlid)
+	build['event']['data']['params']['rootName']="skatersProfiles"
+	build['event']['data']['params']['source']="players"
+	build['event']['data']['params']['type']="skaters"
+
+	return build
+
+def get_edge_profile(nhlid):
+	build={}
+	build['type']='action'
+	build['event']={}
+
+	build['event']['domain']='edge.nhl.com'
+	build['event']['uri']="/en/skater/"+str(nhlid)
+	build['event']['action']='load'
+
+	build['event']['data']={}
+	build['event']['data']['renderFunction']='renderProfileContent'
+	build['event']['data']['callbackFunction']="runClientFns"
+	build['event']['data']['target']="#zonetime-section-content"
+
+	build['event']['data']['params']={}
+	build['event']['data']['params']['feed']="skatersProfiles"
+	build['event']['data']['params']['id']=str(nhlid)
+	build['event']['data']['params']['manpower']="all"
+	build['event']['data']['params']['season']="20232024"
+	build['event']['data']['params']['sectionName']="zonetime"
+	build['event']['data']['params']['stage']="regular"
+	build['event']['data']['params']['units']="imperial"
+
+	return build
+
+
+def get_edge(nhlid):
+	ws=connect("wss://edge.nhl.com/en/skater/"+str(nhlid))
+	#getlabel='{"type":"action","event":{"domain":"edge.nhl.com","uri":"/en/skater/'+str(nhlid)+'","action":"getLabel","data":{"params":{"type":"skaters","player":"'+str(nhlid)+'","rootName":"skatersProfiles","source":"players"}}}}'
+	for build in [get_edge_profile(nhlid), get_edge_profile_player(nhlid), get_edge_card(nhlid)]:
+		ws.send(json.dumps(build))
+	message=ws.recv()
+	print(str(message))
+
+#get_edge(8476881)
+#exit(9)
+
+
+
 def get_pxp(game):
 	playbyplay={}
 	for suffix in ['play-by-play', 'landing', 'boxscore']:
@@ -650,6 +735,8 @@ def get_ro(game):
 	if text is None:
 		return None
 	soup = BeautifulSoup(text, 'html.parser')
+	if soup is None:
+		return None
 	ro={}
 	debug=True
 
@@ -665,7 +752,12 @@ def get_ro(game):
 	teams=[]
 	for rootra in roots:
 		root=nav_tag(soup, rootra)
+		if root is None:
+			continue
+
 		away=nav_tag(root, [1, 1, 1, 1, 1, 1, 3, 1, 1, 1, 1, 0]).attrs['src']
+		if away is None:
+			continue
 		away=re.sub('^.*[lL][oO][gG][oO][aAcC]', '', away)
 		away=re.sub('[0-9]*[.]gif$', '', away)
 		away=away.upper()
@@ -674,6 +766,8 @@ def get_ro(game):
 		home=re.sub('^.*[lL][oO][gG][oO][aAcC]', '', home)
 		home=re.sub('[0-9]*[.]gif$', '', home)
 		home=home.upper()
+		if home is None:
+			continue
 		
 		awayfull=get_string(nav_tag(root, [5, 1, 1, 1, 1]))
 		homefull=get_string(nav_tag(root, [5, 1, 1, 1, 3]))
@@ -1837,36 +1931,136 @@ def collate(data):
 	#collated['data']=data
 	return collated
 
+def rm_player(data, name):
+	namera=re.split('\s+', name)
+	team=namera.pop(0)
+	num=re.sub('[^0-9]+', '', namera.pop(0))
+	if name.upper() == name:
+		for i in range(2, len(namera)):
+			namera[i]=namera[i].lower()
+			namera[i][0]=namera[i][0].upper()
+	name=' '.join(namera)
+
+	for k in ['rosters', 'scratches']:
+		for i in range(0, len(data['RO'][k])):
+			remove=[]
+			for j in range(0, len(data['RO'][k][i])):
+				roentry=data['RO'][k][i][j]
+				if str(roentry['Name']).upper() == name.upper() and roentry['Team'] == team:
+					remove.insert(0, j)
+			for j in remove:
+				data['RO'][k][i].pop(j)
+
+	for teampos in ['awayTeam', 'homeTeam']:
+		if data['PXP'][teampos]['abbrev'] != team:
+			continue
+
+		remove=[]
+		for i in range(0, len(data['PXP']['summary']['gameInfo'][teampos]['scratches'])):
+			pxpentry=data['PXP']['summary']['gameInfo'][teampos]['scratches'][i]
+			pxpname=""
+			if type(pxpentry['firstName']) == type({}):
+				pxpname=pxpentry['firstName']['default']
+			else:
+				pxpname=pxpentry['firstName']
+
+			if type(pxpentry['lastName']) == type({}):
+				pxpname=pxpname+" "+pxpentry['lastName']['default']
+			else:
+				pxpname=pxpname+" "+pxpentry['lastName']
+
+			if pxpname.upper() == name.upper():
+				remove.insert(0, i)
+				break
+
+		for i in remove:
+			data['PXP']['summary']['gameInfo'][teampos]['scratches'].pop(i)
+
+		remove=[]
+		for i in range(0, len(data['PXP']['rosterSpots'])):
+			pxpentry=data['PXP']['rosterSpots'][i]
+			pxpname=""
+			if type(pxpentry['firstName']) == type({}):
+				pxpname=pxpentry['firstName']['default']
+			else:
+				pxpname=pxpentry['firstName']
+
+			if type(pxpentry['lastName']) == type({}):
+				pxpname=pxpname+" "+pxpentry['lastName']['default']
+			else:
+				pxpname=pxpname+" "+pxpentry['lastName']
+
+			if pxpname.upper() == name.upper():
+				remove.insert(0, i)
+				break
+
+		for i in remove:
+			data['PXP']['rosterSpots'].pop(i)
+
+	return data
+
+def add_player(data, name, nhlid, pos="F", scratch=False):
+	namera=re.split('\s+', name)
+	team=namera.pop(0)
+	num=re.sub('[^0-9]+', '', namera.pop(0))
+	if name.upper() == name:
+		for i in range(2, len(namera)):
+			namera[i]=namera[i].lower()
+			namera[i][0]=namera[i][0].upper()
+
+	roi=None
+	for i in range(0, len(data['RO']['rosters'])):
+		for j in range(0, len(data['RO']['rosters'][i])):
+			if 'Team' in data['RO']['rosters'][i][j]:
+				if data['RO']['rosters'][i][j]['Team'] == team:
+					roi=i
+				break
+		if roi is not None:
+			break
+
+	pxpteampos=None
+	for teampos in ['awayTeam', 'homeTeam']:
+		if data['PXP'][teampos]['abbrev'] == team:
+			pxpteampos=teampos
+			break
+
+	roentry={}
+	roentry['#']='#'+str(num)
+	roentry['Pos']=pos
+	roentry['Name']=' '.join(namera)
+	roentry['Team']=str(team)
+	roentry['Scratched']=scratch
+	if scratch:
+		data['RO']['scratches'][roi].append(roentry)
+	else:
+		data['RO']['rosters'][roi].append(roentry)
+
+	pxpentry={}
+	pxpentry['firstName']={}
+	pxpentry['firstName']['default']=namera.pop(0)
+	pxpentry['lastName']={}
+	pxpentry['lastName']['default']=' '.join(namera)
+	if scratch:
+		pxpentry['id']=int(nhlid)
+		data['PXP'][pxpteampos]['scratches'].append(pxpentry)
+	else:
+		pxpentry['teamId']=int(data['PXP'][pxpteampos]['id'])
+		pxpentry['playerId']=int(nhlid)
+		pxpentry['sweaterNumber']=int(num)
+		pxpentry['positionCode']=str(pos)
+		pxpentry['headShot']="https://assets.nhle.com/mugs/nhl/"+str(data["GAME"]["season"])+"/"+str(team)+"/"+str(pxpentry['playerId'])+".png"
+		data['PXP']['rosterSpots'].append(pxpentry)
+
+	return data
+
+
 def fixgames(data):
 	if int(data['GAME']['gamePk']) == 2022010048:
 		print("Fixing up SEA #4 DANNY DEKEYSER")
-		for i in range(0, len(data['RO']['scratches'][1])):
-			roentry=data['RO']['scratches'][0][i]
-			if roentry['#'] == "4" and roentry['Name'] == 'DANNY DEKEYSER' and roentry['Team'] == 'SEA':
-				data['RO']['scratches'][0].pop(i)
-				print("   Removed RO")
-				break
-		for i in range(0, len(data['PXP']['summary']['gameInfo']['awayTeam']['scratches'])):
-			pxpentry=data['PXP']['summary']['gameInfo']['awayTeam']['scratches'][i]
-			if pxpentry['id'] == 8477215:
-				data['PXP']['summary']['gameInfo']['awayTeam']['scratches'].pop(i)
-				print("   Removed PXP")
-				break
-		pxpentry={}
-		pxpentry['teamId']=23
-		pxpentry['playerId']=8477967
-		pxpentry['firstName']={}
-		pxpentry['firstName']['default']='Danny'
-		pxpentry['lastName']={}
-		pxpentry['lastName']['default']='DeKeyser'
-		pxpentry['sweaterNumber']=4
-		pxpentry['positionCode']='C'
-#		pxpentry['headshot']="https://assets.nhle.com/mugs/nhl/latest/8477215.png"
-		pxpentry['headshot']="https://assets.nhle.com/mugs/nhl/20222023/VAN/"+pxpentry['playerId']+".png"
-		data['PXP']['rosterSpots'].append(pxpentry)
+		data=rm_player(data, "SEA #4 Danny DeKeyser")
+		data=add_player(data, "VAN #4 Danny DeKeyser", 8477967, pos="C", scratch=False)
 		print("   Inserted roster entry")
 
-		sys.stdin.readline()
 	elif int(data['GAME']['gamePk']) == 2023010016:
 		for playi in range(0, len(data['PL'])):
 			play=data['PL'][playi]
@@ -1885,6 +2079,29 @@ def fixgames(data):
 				data['PXP']['plays'].append(play)
 				print("Fixed PXP")
 				break
+	elif int(data['GAME']['gamePk']) == 2021010032:
+		data=add_player(data, "NSH #59 Nicholas Porco", 8481665, pos="LW", scratch=False)
+		#NSH #59 Nicholas Porco, 8481665
+		#roentry={}
+		#roentry['#']="59"
+		#roentry['Pos']="L"
+		#roentry['Name']="NICHOLAS PORCO"
+		#roentry['Team']="NSH"
+		#roentry['Scratched']=False
+		#data['RO']['rosters'][0].append(roentry)
+
+		#pxpentry={}
+		#pxpentry['teamId']=18
+		#pxpentry['playerId']=8481665
+		#pxpentry['sweaterNumber']=59
+		#pxpentry['positionCode']="L"
+		#pxpentry['headShot']="https://assets.nhle.com/mugs/nhl/20212022/NSH/"+str(pxpentry['playerId'])+".png"
+		#pxpentry['firstName']={}
+		#pxpentry['firstName']['default']="Nicholas"
+		#pxpentry['lastName']={}
+		#pxpentry['lastName']['default']="Porco"
+		#data['PXP']['rosterSpots'].append(pxpentry)
+
 
 	return data
 
@@ -2783,6 +3000,7 @@ def get_onice_one(collated, playi):
 							if nf in collated['lookup']['players']:
 								print(str(nf)+" -> "+str(collated['lookup']['players'][nf]))
 						print("No lookup for "+n)
+						print(json.dumps(collated, indent=3))
 						exit(132)
 
 					if debug:
@@ -2858,6 +3076,7 @@ def merge_toi_one(collated, playi):
 				continue
 			change={}
 			change['PLEvent']="CHANGE"
+			change['Period']=play['Period']
 			change['Team']=collated['teams'][teampos]['abv']
 			change['TeamPos']=teampos
 			change['dt']=dt
