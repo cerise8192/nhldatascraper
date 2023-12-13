@@ -1898,6 +1898,8 @@ def print_shifts(collated, nhlid):
 
 def collate(data):
 	data=fixgames(data)
+	if data is None:
+		return data
 	f = open('predata.json', 'w')
 	f.write(json.dumps(data))
 	f.close()
@@ -2122,15 +2124,27 @@ def fixgames(data):
 		data=add_player(data, "VAN #4 Danny DeKeyser", 8477967, pos="C", scratch=False)
 		print("   Inserted roster entry")
 
-	elif int(data['GAME']['gamePk']) == 2023010016:
+	elif int(data['GAME']['gamePk']) == 2023010016 or int(data['GAME']['gamePk']) == 2020020526:
+		pendi=None
 		for playi in range(0, len(data['PL'])):
 			play=data['PL'][playi]
 			if play['Event'] == 'GEND':
 				data['PL'].pop(playi)
 				play['#']=str(int(data['PL'][-1]['#'])+1)
 				data['PL'].append(play)
+				data['PL'][-1]['fix']="Created"
 				print("Fixed PL")
 				break
+			elif play['Event'] == 'PEND':
+				if int(data['PL'][playi]['Per']) >= 3:
+					pendi=playi
+
+		if data['PL'][-1]['Event'] != 'GEND':
+			if pendi is not None and int(data['PL'][-1]['Per']) == int(data['PL'][pendi]['Per']):
+				data['PL'].append(data['PL'][pendi])
+				data['PL'][-1]['fix']="Created"
+				data['PL'][-1]['Event']="GEND"
+				data['PL'][-1]['Description']=re.sub('Period End', 'Game End', data['PL'][-1]['Description'])
 
 		for playi in range(0, len(data['PXP']['plays'])):
 			play=data['PXP']['plays'][playi]
@@ -2164,6 +2178,8 @@ def fixgames(data):
 		#data['PXP']['rosterSpots'].append(pxpentry)
 	elif int(data['GAME']['gamePk']) == 2021010006:
 		data=add_player(data, "NYI #64 Alex Jefferies", 8482154, pos="L", scratch=False)
+	elif int(data['GAME']['gamePk']) == 2021010001:
+		return None
 
 	return data
 
