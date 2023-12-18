@@ -2116,15 +2116,35 @@ def add_player(data, name, nhlid, pos="F", scratch=False):
 
 	return data
 
+def add_pl_stop(data, playi):
+	event=data['PL'][playi]
+	event['Event']="STOP"
+	event['Description']="Unknown"
+	event['fix']="Created"
+	data['PL'].insert(playi, event)
+	return data
 
 def fixgames(data):
+#	if int(data['GAME']['gamePk']) == 2023010013:
+#		for playi in range(0, len(data['PL'])):
+#			play=data['PL'][playi]
+#			if play['Event'] == 'FAC' and play['Per'] == str(1) and play['Elapsed'] == "4:44":
+#				data=add_pl_stop(data, playi)
 	if int(data['GAME']['gamePk']) == 2022010048:
 		print("Fixing up SEA #4 DANNY DEKEYSER")
 		data=rm_player(data, "SEA #4 Danny DeKeyser")
 		data=add_player(data, "VAN #4 Danny DeKeyser", 8477967, pos="C", scratch=False)
 		print("   Inserted roster entry")
 
-	elif int(data['GAME']['gamePk']) == 2023010016 or int(data['GAME']['gamePk']) == 2020020526:
+	elif int(data['GAME']['gamePk']) == 2021010032:
+		data=add_player(data, "NSH #59 Nicholas Porco", 8481665, pos="LW", scratch=False)
+	elif int(data['GAME']['gamePk']) == 2021010006:
+		data=add_player(data, "NYI #64 Alex Jefferies", 8482154, pos="L", scratch=False)
+	elif int(data['GAME']['gamePk']) == 2021010001:
+		#This game has a trivial PL
+		return None
+
+	if len(data['PL']) > 0 and data['PL'][-1]['Event'] != 'GEND':
 		pendi=None
 		for playi in range(0, len(data['PL'])):
 			play=data['PL'][playi]
@@ -2132,7 +2152,7 @@ def fixgames(data):
 				data['PL'].pop(playi)
 				play['#']=str(int(data['PL'][-1]['#'])+1)
 				data['PL'].append(play)
-				data['PL'][-1]['fix']="Created"
+				data['PL'][-1]['fix']="Moved"
 				print("Fixed PL")
 				break
 			elif play['Event'] == 'PEND':
@@ -2146,42 +2166,163 @@ def fixgames(data):
 				data['PL'][-1]['Event']="GEND"
 				data['PL'][-1]['Description']=re.sub('Period End', 'Game End', data['PL'][-1]['Description'])
 
+	if 'PXP' in data and len(data['PXP']['plays']) > 0 and data['PXP']['plays'][-1]['typeDescKey'] != 'game-end':
+		pendi=None
 		for playi in range(0, len(data['PXP']['plays'])):
 			play=data['PXP']['plays'][playi]
 			if play['typeDescKey'] == 'game-end':
 				data['PXP']['plays'].pop(playi)
 				play['sortOrder']=data['PXP']['plays'][-1]['sortOrder']+1
+				play['fix']='Moved'
 				data['PXP']['plays'].append(play)
 				print("Fixed PXP")
 				break
-	elif int(data['GAME']['gamePk']) == 2021010032:
-		data=add_player(data, "NSH #59 Nicholas Porco", 8481665, pos="LW", scratch=False)
-		#NSH #59 Nicholas Porco, 8481665
-		#roentry={}
-		#roentry['#']="59"
-		#roentry['Pos']="L"
-		#roentry['Name']="NICHOLAS PORCO"
-		#roentry['Team']="NSH"
-		#roentry['Scratched']=False
-		#data['RO']['rosters'][0].append(roentry)
+			elif play['typeDescKey'] == 'period-end':
+				pendi=playi
 
-		#pxpentry={}
-		#pxpentry['teamId']=18
-		#pxpentry['playerId']=8481665
-		#pxpentry['sweaterNumber']=59
-		#pxpentry['positionCode']="L"
-		#pxpentry['headShot']="https://assets.nhle.com/mugs/nhl/20212022/NSH/"+str(pxpentry['playerId'])+".png"
-		#pxpentry['firstName']={}
-		#pxpentry['firstName']['default']="Nicholas"
-		#pxpentry['lastName']={}
-		#pxpentry['lastName']['default']="Porco"
-		#data['PXP']['rosterSpots'].append(pxpentry)
-	elif int(data['GAME']['gamePk']) == 2021010006:
-		data=add_player(data, "NYI #64 Alex Jefferies", 8482154, pos="L", scratch=False)
-	elif int(data['GAME']['gamePk']) == 2021010001:
-		return None
+		if data['PXP']['plays'][-1]['typeDescKey'] != 'game-end':
+			event={}
+			for k in ['period', 'timeInPeriod', 'timeRemaining', 'homeTeamDefendingSide', 'sortOrder', 'situationCode']:
+				if k not in event:
+					continue
+				event[k]=data['PXP']['plays'][-1][k]
+			event['periodDescriptor']={}
+			for k in ['number', 'periodType']:
+				if k not in event['periodDescriptor']:
+					continue
+				event['periodDescriptor'][k]=data['PXP']['plays'][-1]['period']['periodDescriptor'][k]
+
+			event['eventId']=547
+			event['typeCode']=524
+			event['typeDescKey']='game-end'
+			event['sortOrder']=event['sortOrder']+1
+			event['fix']='Created'
+
+	data=check_markers(data)
+	return data
+
+def check_markers(data):
+	period_start=[None]
+	pstr=[None]
+	pend=[None]
+	savedevent={}
+	eventi=0
+	while eventi < len(data['PL']):
+		event=data['PL'][eventi]
+		if event['Event']=='PGSTR':
+			if eventi != 0:
+				for i in range(0, eventi+1):
+					t=data['PL'][i]
+					print(str(i)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
+				print("No PGSTR at 0 in "+str(data['GAME']['gamePk']))
+				exit(5)
+			savedevent[event['Event']]=event
+			data['PL'].pop(eventi)
+			continue
+		elif event['Event']=='PGEND':
+			if eventi != 0:
+				for i in range(0, eventi+1):
+					t=data['PL'][i]
+					print(str(i)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
+				print("No PGEND at 1 in "+str(data['GAME']['gamePk']))
+				exit(5)
+			savedevent[event['Event']]=event
+			data['PL'].pop(eventi)
+			continue
+		elif event['Event']=='ANTHEM':
+			if eventi != 0:
+				for i in range(0, eventi+1):
+					t=data['PL'][i]
+					print(str(i)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
+				print("No ANTHEM at 2 in "+str(data['GAME']['gamePk']))
+				exit(5)
+			savedevent[event['Event']]=event
+			data['PL'].pop(eventi)
+			continue
+		elif event['Event']=='SOC':
+			if eventi != len(data['PL'])-3:
+				for i in range(eventi, len(data['PL'])):
+					t=data['PL'][i]
+					print(str(i)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
+				print("No SOC at end-2 in "+str(data['GAME']['gamePk']))
+				exit(5)
+			savedevent[event['Event']]=event
+			data['PL'].pop(eventi)
+			continue
+		elif event['Event']=='GEND':
+			if eventi != len(data['PL'])-1:
+				for i in range(eventi, len(data['PL'])):
+					t=data['PL'][i]
+					print(str(i)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
+				print("No GEND at end in "+str(data['GAME']['gamePk']))
+				exit(5)
+			savedevent[event['Event']]=event
+			data['PL'].pop(eventi)
+			continue
+
+		if int(event['Per']) >= len(pstr):
+			print("Start period "+str(event['Per']))
+			period_start.insert(int(event['Per']), eventi)
+			pstr.insert(int(event['Per']), None)
+			pend.insert(int(event['Per']), eventi)
+		else:
+			pend[int(event['Per'])]=eventi
+
+		if event['Event'] == 'PSTR':
+			print("PSTR for "+str(event['Per'])+" of "+str(len(pstr))+" at "+str(eventi))
+			pstr[int(event['Per'])]=eventi
+
+		eventi=eventi+1
+
+	for startevent in ['PGSTR', 'PGEND', 'ANTHEM']:
+		if startevent not in savedevent:
+			event={}
+			event['Per']="1"
+			event['Elapsed']="0:00"
+			event['Remaining']="20:00"
+			event['Event']=startevent
+			event['fix']='Created'
+			savedevent[startevent]=event
+	
+	for period in range(1, len(pstr)):
+		if pstr[period] == period_start[period]:
+			continue
+		#2023/02/0078
+		elif pstr[period] == period_start[period]+1 and data['PL'][period_start[period]]['Event'] == 'STOP' and data['PL'][period_start[period]]['Description'] == 'SWITCH SIDES':
+			continue
+
+		if pstr[period] is not None:
+			for i in range(period_start[period], pstr[period]+1):
+				event=data['PL'][i]
+				print(event['Per']+", "+event['Elapsed']+" - "+event['Event'])
+			print("No start for period "+str(period))
+			exit(5)
+
+		if data['PL'][pend[period]]['Event'] != 'PEND':
+			for i in range(pend[period]-10, pend[period]+1):
+				event=data['PL'][i]
+				print(event['Per']+", "+event['Elapsed']+" - "+event['Event'])
+			print("No end for period "+str(period))
+			exit(5)
+
+		if data['GAME']['gameType'] != 3 and len(pend) > 5:
+			if data['PL'][pend[5]-1]['Event'] != 'SOC':
+				event=data['PL'][i]
+				print(event['Per']+", "+event['Elapsed']+" - "+event['Event'])
+			print("No SOC for period "+str(period))
+			exit(5)
+
+	for startevent in ['ANTHEM', 'PGEND', 'PGSTR']:
+		if startevent in savedevent:
+			data['PL'].insert(0, savedevent[startevent])
+	
+	if 'SOC' in savedevent:
+		data['PL'].insert(len(data['PL'])-1, savedevent['SOC'])
+	if 'GEND' in savedevent:
+		data['PL'].append(savedevent['GEND'])
 
 	return data
+
 
 def parsedesc(format, desc, play, player_lookup):
 	lastteam=None
@@ -2639,7 +2780,8 @@ def parse_pl(data, collated):
 				template=template[0:player.start()]+'{{Shooter|player}}'+template[player.end():]
 
 			play=parsedesc(template, plplay['Description'], play, collated['lookup']['players'])
-
+		elif plplay['Event'] == 'PBOX': #This event is jsut to denote that someone went to the penalty box
+			pass
 		elif plplay['Event'] == 'PEND':
 			pass
 		elif plplay['Event'] == 'PENL':
@@ -2810,7 +2952,9 @@ def parse_pl(data, collated):
 		elif plplay['Event'] == 'TAKE':
 			play=parsedesc("{{Taking Team|team}} TAKEAWAY - {{Taker|player}}, {{SubZone|zone}}", plplay['Description'], play, collated['lookup']['players'])
 		else:
+			print(json.dumps(plplay, indent=3))
 			print("Unknown PLEvent: "+plplay['Event'])
+			print(str(data['GAME']['gamePk']))
 			exit(109)
 
 		for team in collated['teams']:
@@ -2890,6 +3034,63 @@ def build_toi_tree(collated):
 	
 	return toitree
 
+def add_stops(collated, playi):
+	if 'stop' not in collated['temp']:
+		collated['temp']['stop']=True
+
+	play = collated['plays'][playi]
+	if play['PLEvent'] == 'FAC':
+		if collated['temp']['stop'] == False:
+			event={}
+			for k in ['Period', 'Elapsed', 'Remaining', 'dt', 'PLPlay']:
+				if k in play:
+					event[k]=play[k]
+			event['PLEvent']="STOP"
+			event['fix']="created"
+			event['Stopped']=True
+
+			reserve=[]
+			while len(play['changes']) > 0 and play['changes'][-1]['dt'] == play['dt']:
+				reserve.append(play['changes'].pop())
+			play['changes'].append(event)
+			while len(reserve) > 0:
+				play['changes'].append(reserve.pop())
+
+		collated['temp']['stop']=False
+	elif play['PLEvent'] == 'EIEND':
+		collated['temp']['stop']=True
+	elif play['PLEvent'] == 'EISTR':
+		collated['temp']['stop']=True
+	elif play['PLEvent'] == 'GEND':
+		collated['temp']['stop']=True
+	elif play['PLEvent'] == 'GOAL':
+		collated['temp']['stop']=True
+	elif play['PLEvent'] == 'PEND':
+		collated['temp']['stop']=True
+	elif play['PLEvent'] == 'PENL':
+		collated['temp']['stop']=True
+	elif play['PLEvent'] == 'STOP':
+		collated['temp']['stop']=True
+	play['Stopped']=collated['temp']['stop']
+
+	collated['plays'][playi]=play
+
+	return collated
+
+def add_strength(collated, playi):
+	if 'Strength' not in collated['temp']:
+		collated['temp']['Strength']="0v0"
+
+	play=collated['plays'][playi]
+	if 'changes' in play:
+		for change in play['changes']:
+			if 'Strength' in change:
+				collated['temp']['Strength']=change['Strength']
+	play['Strength']=collated['temp']['Strength']
+	collated['plays'][playi]=play
+
+	return collated
+
 def merge_loop(data, collated):
 	lastlive=0
 
@@ -2897,6 +3098,7 @@ def merge_loop(data, collated):
 	playi=0
 	collated['temp']['toi']=build_toi_tree(collated)
 	
+	stopped=True
 	while playi < len(collated['plays']):
 		#Use lists of players to create off/stay/on
 		collated=get_onice_one(collated, playi)
@@ -2907,6 +3109,10 @@ def merge_loop(data, collated):
 		collated=merge_pl_live_one(data, collated, playi)
 
 		collated=merge_pl_pxp_one(data, collated, playi)
+
+		collated=add_stops(collated, playi)
+
+		collated=add_strength(collated, playi)
 
 		if 'changes' in collated['plays'][playi]:
 			addplays=collated['plays'][playi]['changes']
@@ -3890,7 +4096,7 @@ def process_game(game):
 		newdata=collate(data)
 
 	if newdata is not None:
-		newdata['version']=2
+		newdata['version']=5
 
 		try:
 			if len(data['PL']) > 0 and (data['PL'][-1]['Event'] == "GEND" or data['PL'][-1]['Event'] == "GOFF" or data['PL'][-1]['Event'] == "EGPID"):
@@ -4051,7 +4257,7 @@ def final_game(game):
 		pass
 
 	try:
-		if game['status'] == 'Final' and game['version'] == 2:
+		if False and game['status'] == 'Final' and game['version'] == 5:
 			return True
 	except KeyError as e:
 		print(e)
