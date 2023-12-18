@@ -2314,6 +2314,25 @@ def check_markers(data):
 			print("No start for period "+str(period))
 			exit(5)
 
+			for i in range(period_start[period], pend[period]):
+				event = data['PL'][i]
+				if event['Event'] != 'PGSTR' and event['Event'] != 'PGEND' and event['Event'] != 'ANTHEM':
+					for j in range(period_start[period], i+1):
+						t=data['PL'][j]
+						print(event['Per']+", "+event['Elapsed']+" - "+event['Event'])
+					print("Invalid event "+event['Event']+" in start of period "+str(period))
+					exit(5)
+
+		if pend[period] is not None:
+			for i in range(pend[period], period_start[period]-1, -1):
+				event = data['PL'][i]
+				if event['Event'] != 'SOC' and event['Event'] != 'PEND' and event['Event'] != 'GOFF' and event['Event'] != 'GEND':
+					for j in range(pend[period]-10, pend[period]):
+						t=data['PL'][j]
+						print(event['Per']+", "+event['Elapsed']+" - "+event['Event'])
+					print("Invalid event "+event['Event']+" in start of period "+str(period))
+					exit(5)
+
 		if data['PL'][pend[period]]['Event'] != 'PEND':
 			for i in range(pend[period]-10, pend[period]+1):
 				event=data['PL'][i]
