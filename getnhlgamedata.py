@@ -2240,22 +2240,38 @@ def check_markers(data):
 			data['PL'].pop(eventi)
 			continue
 		elif event['Event']=='SOC':
-			if eventi != len(data['PL'])-3:
-				for i in range(eventi, len(data['PL'])):
-					t=data['PL'][i]
-					print(str(i)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
-				print("No SOC at end-2 in "+str(data['GAME']['gamePk']))
-				exit(5)
+			for i in range(eventi, len(data['PL'])):
+				t=data['PL'][i]
+				if t['Event'] != 'SOC' and t['Event'] != 'PEND' and t['Event'] != 'GOFF' and t['Event'] != 'GEND':
+					for j in range(eventi, len(data['PL'])):
+						t=data['PL'][j]
+						print(str(j)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
+					print("Invalid event "+t['Event']+" after SOC in game "+str(data['GAME']['gamePk']))
+					exit(5)
+			savedevent[event['Event']]=event
+			data['PL'].pop(eventi)
+			continue
+		elif event['Event']=='GOFF':
+			for i in range(eventi, len(data['PL'])):
+				t=data['PL'][i]
+				if t['Event'] != 'GOFF' and t['Event'] != 'GEND':
+					for j in range(eventi, len(data['PL'])):
+						t=data['PL'][j]
+						print(str(j)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
+					print("Invalid event "+t['Event']+" after GOFF in game "+str(data['GAME']['gamePk']))
+					exit(5)
 			savedevent[event['Event']]=event
 			data['PL'].pop(eventi)
 			continue
 		elif event['Event']=='GEND':
-			if eventi != len(data['PL'])-1:
-				for i in range(eventi, len(data['PL'])):
-					t=data['PL'][i]
-					print(str(i)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
-				print("No GEND at end in "+str(data['GAME']['gamePk']))
-				exit(5)
+			for i in range(eventi, len(data['PL'])):
+				t=data['PL'][i]
+				if t['Event'] != 'GEND':
+					for j in range(eventi, len(data['PL'])):
+						t=data['PL'][j]
+						print(str(j)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
+					print("Invalid event "+t['Event']+" after GEND in game "+str(data['GAME']['gamePk']))
+					exit(5)
 			savedevent[event['Event']]=event
 			data['PL'].pop(eventi)
 			continue
@@ -2315,11 +2331,10 @@ def check_markers(data):
 	for startevent in ['ANTHEM', 'PGEND', 'PGSTR']:
 		if startevent in savedevent:
 			data['PL'].insert(0, savedevent[startevent])
-	
-	if 'SOC' in savedevent:
-		data['PL'].insert(len(data['PL'])-1, savedevent['SOC'])
-	if 'GEND' in savedevent:
-		data['PL'].append(savedevent['GEND'])
+
+	for endevent in ['SOC', 'GOFF', 'GEND']:
+		if endevent in savedevent:
+			data['PL'].append(savedevent[endevent])
 
 	return data
 
