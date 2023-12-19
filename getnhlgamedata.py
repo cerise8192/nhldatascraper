@@ -2195,7 +2195,7 @@ def fixgames(data):
 			event['eventId']=547
 			event['typeCode']=524
 			event['typeDescKey']='game-end'
-			event['sortOrder']=event['sortOrder']+1
+			event['sortOrder']=data['PXP']['plays'][-1]['sortOrder']+1
 			event['fix']='Created'
 
 	data=check_markers(data)
@@ -3068,6 +3068,80 @@ def build_toi_tree(collated):
 	
 	return toitree
 
+def add_icing(collated, playi):
+	if 'icing' not in collated['temp']:
+		collated['temp']['icing']=None
+
+	play=collated['plays'][playi]
+	if play['PLEvent'] == 'STOP':
+		if 'PL' in play and 'Description' in play['PL'] and re.search('ICING', play['PL']['Description']):
+			collated['temp']['icing']=playi
+		elif 'PXP' in play and 'details' in play['PXP'] and 'reason' in play['PXP']['details'] and re.search('icing', play['PXP']['details']['reason']):
+			collated['temp']['icing']=playi
+	elif play['PLEvent'] == 'FAC':
+		if collated['temp']['icing'] is None:
+			return collated
+
+		icedby="Unknown"
+		if 'PXP' in play and 'details' in play['PXP'] and 'xCoord' in play['PXP']['details']:
+			if play['PXP']['details']['xCoord'] < -50:
+				if play['PXP']['homeTeamDefendingSide'] == 'left':
+					icedby=collated['teams']['home']['abv']
+				else:
+					icedby=collated['teams']['away']['abv']
+			elif play['PXP']['details']['xCoord'] > 50:
+				if play['PXP']['homeTeamDefendingSide'] == 'right':
+					icedby=collated['teams']['home']['abv']
+				else:
+					icedby=collated['teams']['away']['abv']
+		elif 'SubZone' in play:
+			if play['Winning Team'] == collated['teams']['home']['abv']:
+				if play['SubZone'] == 'Def. Zone':
+					icedby=collated['teams']['home']['abv']
+				elif play['SubZone'] == 'Off. Zone':
+					icedby=collated['teams']['away']['abv']
+			else:
+				if play['SubZone'] == 'Def. Zone':
+					icedby=collated['teams']['away']['abv']
+				elif play['SubZone'] == 'Off. Zone':
+					icedby=collated['teams']['home']['abv']
+
+		for i in range(collated['temp']['icing'], playi+1):
+			collated['plays'][i]['icing']=icedby
+
+	return collated
+
+def add_zone(collated, playi):
+	play=collated['plays'][playi]
+	if 'SubZone' not in play:
+		return collated
+	if 'PL' not in play:
+		return collated
+
+#	if play['PLEvent'] == 'FAC':
+#		if play['PL']['Winning Team'] == collated['teams']['away']['abv']
+
+	if 'PXP' in play:
+		if 'details' in play['PXP']:
+			if 'xCoord' in play['PXP']['details']:
+				if play['PXP']['details']['xCoord'] <= -30:
+					play['Zone']='Left'
+				elif play['PXP']['details']['xCoord'] < 30:
+					play['Zone']='Center'
+				else:
+					play['Zone']='Right'
+
+				for k in play:
+					if k == 'PXP':
+						continue
+					elif k == 'changes':
+						continue
+					print(json.dumps(play[k]))
+				print(collated['teams']['home']['abv']+" == home")
+				print("Zone == "+play['SubZone']+" == "+str(play['PXP']['details']['xCoord'])+", "+play['PXP']['homeTeamDefendingSide']+" -> "+play['Zone'])
+
+	return collated
+
 def add_stops(collated, playi):
 	if 'stop' not in collated['temp']:
 		collated['temp']['stop']=True
@@ -3147,6 +3221,10 @@ def merge_loop(data, collated):
 		collated=add_stops(collated, playi)
 
 		collated=add_strength(collated, playi)
+
+		collated=add_icing(collated, playi)
+
+		collated=add_zone(collated, playi)
 
 		if 'changes' in collated['plays'][playi]:
 			addplays=collated['plays'][playi]['changes']
@@ -3476,6 +3554,9 @@ def merge_toi_one(collated, playi):
 				continue
 			change={}
 			change['PLEvent']="CHANGE"
+			change['Period']=play['Period']
+			change['Elapsed']=play['Elapsed']
+			change['Remaining']=play['Remaining']
 			change['Team']=collated['teams'][teampos]['abv']
 			change['TeamPos']=teampos
 			change['dt']=play['dt']
@@ -4130,7 +4211,7 @@ def process_game(game):
 		newdata=collate(data)
 
 	if newdata is not None:
-		newdata['version']=5
+		newdata['version']=0
 
 		try:
 			if len(data['PL']) > 0 and (data['PL'][-1]['Event'] == "GEND" or data['PL'][-1]['Event'] == "GOFF" or data['PL'][-1]['Event'] == "EGPID"):
@@ -4291,7 +4372,7 @@ def final_game(game):
 		pass
 
 	try:
-		if False and game['status'] == 'Final' and game['version'] == 5:
+		if False and game['status'] == 'Final' and game['version'] == 0:
 			return True
 	except KeyError as e:
 		print(e)
