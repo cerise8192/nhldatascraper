@@ -158,7 +158,7 @@ def debug_html(tag, indent=0, path=''):
 	path=path+str(tag.name)
 
 	if str(tag.name) != 'None':
-		print(indent_str+path)
+		print("path:"+indent_str+path)
 		printme=indent_str+'<'+str(tag.name)
 		for attr in tag.attrs:
 			try:
@@ -455,9 +455,10 @@ def get_pxp(game):
 	playbyplay={}
 	for suffix in ['play-by-play', 'landing', 'boxscore']:
 		url='https://api-web.nhle.com/v1/gamecenter/'+str(game['gamePk'])+'/'+suffix
+		print("get_pxp for "+url)
 		text=wget(url)
 		if text is None:
-			pass
+			continue
 		try:
 			newdata=json.loads(text)
 			for k in newdata:
@@ -492,6 +493,7 @@ def get_game_info(data, collated):
 	collated['season']=str(int(collated['year']))+str(int(collated['year'])+1)
 	collated['season_type']=collated['gamePk'][4:6]
 	collated['game']=collated['gamePk'][6:]
+	collated['date']=data['PXP']['gameDate']
 
 	return collated
 
@@ -515,6 +517,11 @@ def get_gamedata(game):
 
 	print("Play by play..."+gameid)
 	data['PL']=get_pl(game)
+	data['PLNOTE']=[]
+	if data['PL'] is not None:
+		while len(data['PL']) > 0 and data['PL'][0]['Event'] == 'NOTE':
+			data['PLNOTE'].append(data['PL'].pop(0))
+	
 	print("Rosters..."+gameid)
 	data['RO']=get_ro(game)
 	print("Visitor TOI..."+gameid)
@@ -668,11 +675,24 @@ def get_pl(game):
 	if text is None:
 		return None
 	soup = BeautifulSoup(text, 'html.parser')
+	pl=[]
 
 	root=nav_tag(soup, [0, 5])
+	#soup = document, 0 = html, 5 = body
+
+	gameinfo=nav_tag(soup, [0, 5, 3, 1, 1, 1, 1, 1, 3, 1])
+	for td in tag_search(gameinfo, ['tr', 'td']):
+		text=get_string(td)
+		event={}
+		event['Event']='NOTE'
+		event['Description']=text
+		event['Per']="1"
+		event['Elapsed']="0:00"
+		event['Remaining']="20:00"
+		event['#']="0"
+		pl.append(event)
 
 	cols=[]
-	pl=[]
 	for table in tag_search(root, ['div', 'table']):
 		for tr in tag_search(table, ['tr']):
 			if debug_pl:
@@ -1930,6 +1950,20 @@ def collate(data):
 	print("Merge to PL")
 	collated=merge_loop(data, collated)
 
+	collated['notes']=[]
+	for note in data['PLNOTE']:
+		if re.search('^\s*[^,]+[,]\s+\S+\s+[0-9]+,\s+[0-9]+\s*$', note['Description']):
+			note['Event']="DATE"
+		elif re.search('^\s*Attendance\s+.*', note['Description']):
+			note['Event']="ATND"
+		elif re.search('^\s*Start\s+', note['Description']):
+			note['Event']="TIME"
+		elif re.search('^\s*Game\s+[0-9]+\s*$', note['Description']):
+			note['Event']="GAME"
+		elif re.search('^\s*Final\s*$', note['Description']):
+			note['Event']="FINAL"
+		collated['notes'].insert(0, note)
+
 	#collated['data']=data
 	return collated
 
@@ -2143,220 +2177,132 @@ def fixgames(data):
 	elif int(data['GAME']['gamePk']) == 2021010001:
 		#This game has a trivial PL
 		return None
+	elif int(data['GAME']['gamePk']) == 2022010014:
+		data['TV']["45 JAKE BISCHOFF"]=data['TV']["45 JAKE  BISCHOFF"]
+		del(data['TV']["45 JAKE  BISCHOFF"])
 
-	if len(data['PL']) > 0 and data['PL'][-1]['Event'] != 'GEND':
-		pendi=None
+		for teami in data['RO']:
+			for player in data['RO'][teami]:
+				if 'Name' not in player:
+					continue
+				if player['Name'] == "JAKE  BISCHOFF":
+					player['Name'] = "JAKE BISCHOFF"
+					break
+
 		for playi in range(0, len(data['PL'])):
 			play=data['PL'][playi]
-			if play['Event'] == 'GEND':
-				data['PL'].pop(playi)
-				play['#']=str(int(data['PL'][-1]['#'])+1)
-				data['PL'].append(play)
-				data['PL'][-1]['fix']="Moved"
-				print("Fixed PL")
-				break
-			elif play['Event'] == 'PEND':
-				if int(data['PL'][playi]['Per']) >= 3:
-					pendi=playi
+			if 'VGK On Ice' not in play:
+				continue
+			play['VGK On Ice']=re.sub('VGK #45 JAKE  BISCHOFF', 'VGK #45 JAKE BISCHOFF', play['VGK On Ice'])
+			data['PL'][playi]=play
 
-		if data['PL'][-1]['Event'] != 'GEND':
-			if pendi is not None and int(data['PL'][-1]['Per']) == int(data['PL'][pendi]['Per']):
-				data['PL'].append(data['PL'][pendi])
-				data['PL'][-1]['fix']="Created"
-				data['PL'][-1]['Event']="GEND"
-				data['PL'][-1]['Description']=re.sub('Period End', 'Game End', data['PL'][-1]['Description'])
+#		if data['PXP']['plays'][-1]['typeDescKey'] != 'game-end':
+#			event={}
+#			for k in ['period', 'timeInPeriod', 'timeRemaining', 'homeTeamDefendingSide', 'sortOrder', 'situationCode']:
+#				if k not in event:
+#					continue
+#				event[k]=data['PXP']['plays'][-1][k]
+#			event['periodDescriptor']={}
+#			for k in ['number', 'periodType']:
+#				if k not in event['periodDescriptor']:
+#					continue
+#				event['periodDescriptor'][k]=data['PXP']['plays'][-1]['period']['periodDescriptor'][k]
+#
+#			event['eventId']=547
+#			event['typeCode']=524
+#			event['typeDescKey']='game-end'
+#			event['sortOrder']=data['PXP']['plays'][-1]['sortOrder']+1
+#			event['fix']='Created'
 
-	if 'PXP' in data and len(data['PXP']['plays']) > 0 and data['PXP']['plays'][-1]['typeDescKey'] != 'game-end':
-		pendi=None
-		for playi in range(0, len(data['PXP']['plays'])):
-			play=data['PXP']['plays'][playi]
-			if play['typeDescKey'] == 'game-end':
-				data['PXP']['plays'].pop(playi)
-				play['sortOrder']=data['PXP']['plays'][-1]['sortOrder']+1
-				play['fix']='Moved'
-				data['PXP']['plays'].append(play)
-				print("Fixed PXP")
-				break
-			elif play['typeDescKey'] == 'period-end':
-				pendi=playi
-
-		if data['PXP']['plays'][-1]['typeDescKey'] != 'game-end':
-			event={}
-			for k in ['period', 'timeInPeriod', 'timeRemaining', 'homeTeamDefendingSide', 'sortOrder', 'situationCode']:
-				if k not in event:
-					continue
-				event[k]=data['PXP']['plays'][-1][k]
-			event['periodDescriptor']={}
-			for k in ['number', 'periodType']:
-				if k not in event['periodDescriptor']:
-					continue
-				event['periodDescriptor'][k]=data['PXP']['plays'][-1]['period']['periodDescriptor'][k]
-
-			event['eventId']=547
-			event['typeCode']=524
-			event['typeDescKey']='game-end'
-			event['sortOrder']=data['PXP']['plays'][-1]['sortOrder']+1
-			event['fix']='Created'
-
-	data=check_markers(data)
+#EGT, PGSTR, PGEND, ANTHEM, PSTR
+#SOC, GOFF, GEND
+	data['PL']=period_markers(data['PL'])
+	data['PL']=game_markers(data['PL'])
 	return data
 
-def check_markers(data):
-	period_start=[None]
-	pstr=[None]
-	pend=[None]
-	savedevent={}
-	eventi=0
-	while eventi < len(data['PL']):
-		event=data['PL'][eventi]
-		if event['Event']=='PGSTR':
-			if eventi != 0:
-				for i in range(0, eventi+1):
-					t=data['PL'][i]
-					print(str(i)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
-				print("No PGSTR at 0 in "+str(data['GAME']['gamePk']))
-				exit(5)
-			savedevent[event['Event']]=event
-			data['PL'].pop(eventi)
-			continue
-		elif event['Event']=='PGEND':
-			if eventi != 0:
-				for i in range(0, eventi+1):
-					t=data['PL'][i]
-					print(str(i)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
-				print("No PGEND at 1 in "+str(data['GAME']['gamePk']))
-				exit(5)
-			savedevent[event['Event']]=event
-			data['PL'].pop(eventi)
-			continue
-		elif event['Event']=='ANTHEM':
-			if eventi != 0:
-				for i in range(0, eventi+1):
-					t=data['PL'][i]
-					print(str(i)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
-				print("No ANTHEM at 2 in "+str(data['GAME']['gamePk']))
-				exit(5)
-			savedevent[event['Event']]=event
-			data['PL'].pop(eventi)
-			continue
-		elif event['Event']=='SOC':
-			for i in range(eventi, len(data['PL'])):
-				t=data['PL'][i]
-				if t['Event'] != 'SOC' and t['Event'] != 'PEND' and t['Event'] != 'GOFF' and t['Event'] != 'GEND':
-					for j in range(eventi, len(data['PL'])):
-						t=data['PL'][j]
-						print(str(j)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
-					print("Invalid event "+t['Event']+" after SOC in game "+str(data['GAME']['gamePk']))
-					exit(5)
-			savedevent[event['Event']]=event
-			data['PL'].pop(eventi)
-			continue
-		elif event['Event']=='GOFF':
-			for i in range(eventi, len(data['PL'])):
-				t=data['PL'][i]
-				if t['Event'] != 'GOFF' and t['Event'] != 'GEND':
-					for j in range(eventi, len(data['PL'])):
-						t=data['PL'][j]
-						print(str(j)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
-					print("Invalid event "+t['Event']+" after GOFF in game "+str(data['GAME']['gamePk']))
-					exit(5)
-			savedevent[event['Event']]=event
-			data['PL'].pop(eventi)
-			continue
-		elif event['Event']=='GEND':
-			for i in range(eventi, len(data['PL'])):
-				t=data['PL'][i]
-				if t['Event'] != 'GEND':
-					for j in range(eventi, len(data['PL'])):
-						t=data['PL'][j]
-						print(str(j)+". "+t['#']+" "+t['Per']+", "+t['Elapsed']+" - "+t['Event'])
-					print("Invalid event "+t['Event']+" after GEND in game "+str(data['GAME']['gamePk']))
-					exit(5)
-			savedevent[event['Event']]=event
-			data['PL'].pop(eventi)
-			continue
-
-		if int(event['Per']) >= len(pstr):
-			print("Start period "+str(event['Per']))
-			period_start.insert(int(event['Per']), eventi)
-			pstr.insert(int(event['Per']), None)
-			pend.insert(int(event['Per']), eventi)
-		else:
-			pend[int(event['Per'])]=eventi
-
-		if event['Event'] == 'PSTR':
-			print("PSTR for "+str(event['Per'])+" of "+str(len(pstr))+" at "+str(eventi))
-			pstr[int(event['Per'])]=eventi
-
-		eventi=eventi+1
-
-	for startevent in ['PGSTR', 'PGEND', 'ANTHEM']:
-		if startevent not in savedevent:
-			event={}
-			event['Per']="1"
-			event['Elapsed']="0:00"
-			event['Remaining']="20:00"
-			event['Event']=startevent
-			event['fix']='Created'
-			savedevent[startevent]=event
+def game_markers(pl):
+	pgstr=-1
+	pgend=-1
+	anthem=-1
+	soc=-1
+	goff=-1
+	gend=-1
+	for i in range(0, len(pl)):
+		play=pl[i]
+		if play['Event'] == 'PGSTR':
+			pgstr=i
+		elif play['Event'] == 'PGEND':
+			pgend=i
+		elif play['Event'] == 'ANTHEM':
+			anthem=i
+		elif play['Event'] == 'SOC':
+			soc=i
+		elif play['Event'] == 'GOFF':
+			goff=i
+		elif play['Event'] == 'GEND':
+			gend=i
 	
-	for period in range(1, len(pstr)):
-		if pstr[period] == period_start[period]:
+	if pgstr == -1:
+		pass
+	if pgend == -1:
+		pass
+	if anthem == -1:
+		pass
+	if soc == -1:
+		pass
+	if goff == -1:
+		pass
+	if gend == -1:
+		pass
+
+	return pl
+
+def period_markers(pl):
+	start=[None]
+	end=[None]
+	pstr=[False]
+	pend=[False]
+	for i in range(0, len(pl)):
+		period=0
+		play=pl[i]
+		if 'Per' in play:
+			period=int(play['Per'])
+		else:
 			continue
-		#2023/02/0078
-		elif pstr[period] == period_start[period]+1 and data['PL'][period_start[period]]['Event'] == 'STOP' and data['PL'][period_start[period]]['Description'] == 'SWITCH SIDES':
-			continue
 
-		if pstr[period] is not None:
-			for i in range(period_start[period], pstr[period]+1):
-				event=data['PL'][i]
-				print(event['Per']+", "+event['Elapsed']+" - "+event['Event'])
-			print("No start for period "+str(period))
-			exit(5)
+		if period >= len(start):
+			start.insert(period, i)
+			end.insert(period, i)
+			pstr.insert(period, False)
+			pend.insert(period, False)
+		else:
+			if play['Event'] == 'GEND':
+				continue
+			elif play['Event'] == 'GOFF':
+				continue
+			elif play['Event'] == 'SOC':
+				continue
+			end[period]=i
 
-			for i in range(period_start[period], pend[period]):
-				event = data['PL'][i]
-				if event['Event'] != 'PGSTR' and event['Event'] != 'PGEND' and event['Event'] != 'ANTHEM':
-					for j in range(period_start[period], i+1):
-						t=data['PL'][j]
-						print(event['Per']+", "+event['Elapsed']+" - "+event['Event'])
-					print("Invalid event "+event['Event']+" in start of period "+str(period))
-					exit(5)
+		if play['Event'] == 'PSTR':
+			pstr[period]=True
+		elif play['Event'] == 'PEND':
+			pend[period]=True
 
-		if pend[period] is not None:
-			for i in range(pend[period], period_start[period]-1, -1):
-				event = data['PL'][i]
-				if event['Event'] != 'SOC' and event['Event'] != 'PEND' and event['Event'] != 'GOFF' and event['Event'] != 'GEND':
-					for j in range(pend[period]-10, pend[period]):
-						t=data['PL'][j]
-						print(event['Per']+", "+event['Elapsed']+" - "+event['Event'])
-					print("Invalid event "+event['Event']+" in start of period "+str(period))
-					exit(5)
+	for period in range(len(pstr)-1, 0, -1):
+		if not pend[period]:
+			newplay=pl[pend[period]]
+			newplay['Event']='PEND'
+			newplay['Description']=''
+			pl.insert(end[period], newplay)
 
-		if data['PL'][pend[period]]['Event'] != 'PEND':
-			for i in range(pend[period]-10, pend[period]+1):
-				event=data['PL'][i]
-				print(event['Per']+", "+event['Elapsed']+" - "+event['Event'])
-			print("No end for period "+str(period))
-			exit(5)
+		if not pstr[period]:
+			newplay=pl[pstr[period]]
+			newplay['Event']='PSTR'
+			newplay['Description']=''
+			pl.insert(start[period], newplay)
 
-		if data['GAME']['gameType'] != 3 and len(pend) > 5:
-			if data['PL'][pend[5]-1]['Event'] != 'SOC':
-				event=data['PL'][i]
-				print(event['Per']+", "+event['Elapsed']+" - "+event['Event'])
-			print("No SOC for period "+str(period))
-			exit(5)
-
-	for startevent in ['ANTHEM', 'PGEND', 'PGSTR']:
-		if startevent in savedevent:
-			data['PL'].insert(0, savedevent[startevent])
-
-	for endevent in ['SOC', 'GOFF', 'GEND']:
-		if endevent in savedevent:
-			data['PL'].append(savedevent[endevent])
-
-	return data
-
+	return pl
 
 def parsedesc(format, desc, play, player_lookup):
 	lastteam=None
@@ -4222,6 +4168,15 @@ def process_game(game):
 			pass
 
 		try:
+			newdata['status']="Ongoing"
+			for note in newdata['notes']:
+				if note['Event'] == 'FINAL':
+					print("Final by PL note")
+					newdata['status']="Final"
+		except KeyError as e:
+			pass
+
+		try:
 			if (data['PXP']['gameState'] == 'FINAL' or data['PXP']['gameState'] == 'OFF') and data['PXP']['gameScheduleState'] == 'OK':
 				print("Final by gameState")
 				if 'status' in newdata and newdata['status'] == 'Ongoing':
@@ -4372,7 +4327,7 @@ def final_game(game):
 		pass
 
 	try:
-		if False and game['status'] == 'Final' and game['version'] == 0:
+		if game['status'] == 'Final' and game['version'] == 1:
 			return True
 	except KeyError as e:
 		print(e)
