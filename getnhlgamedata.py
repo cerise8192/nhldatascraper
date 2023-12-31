@@ -8,6 +8,7 @@ import json
 import time
 import re
 import math
+import concurrent.futures
 from unidecode import unidecode
 from bs4 import BeautifulSoup,NavigableString,Tag
 from websockets.sync.client import connect
@@ -2216,17 +2217,80 @@ def fixgames(data):
 
 #EGT, PGSTR, PGEND, ANTHEM, PSTR
 #SOC, GOFF, GEND
-	data['PL']=period_markers(data['PL'])
-	data['PL']=game_markers(data['PL'])
+	data['PL']=pl_period_markers(data['PL'])
+	data['PL']=pl_game_markers(data['PL'])
+	data['PXP']=pxp_game_markers(data['PXP'])
 	return data
 
-def game_markers(pl):
+
+def pxp_game_markers(pxp):
+	if len(pxp['plays']) == 0:
+		return pxp
+
+	gend=-1
+	pend=-1
+	for i in range(0, len(pxp['plays'])):
+		play=pxp['plays'][i]
+		if play['typeDescKey'] == 'game-end':
+			gend=i
+		elif play['typeDescKey'] == 'period-end':
+			pend=i
+
+	if gend == -1:
+		print("No game-end found")
+		newevent={}
+		if pend != -1:
+			newevent=pxp['plays'][pend]
+			newevent['fix']='from pend'
+		else:
+			check=["period", "periodDescriptor", "timeInPeriod", "timeRemaining", "situationCode", "homeTeamDefendingSide"]
+			for playi in range(len(pxp['plays'])-1, -1, -1):
+				for fieldi in range(len(check)-1, -1, -1):
+					if check[fieldi] in pxp['plays'][playi]:
+						newevent[check[fieldi]]=pxp['plays'][playi][check[fieldi]]
+						check.pop(fieldi)
+			newevent['fix']='created'
+
+		newevent['eventId']=767
+		newevent['typeCode']=524
+		newevent['typeDescKey']="game-end"
+		newevent['sortOrder']=pxp['plays'][-1]['sortOrder']+1
+		pxp['plays'].append(newevent)
+#            {
+#                "eventId": 767,
+#                "period": 3,
+#                "periodDescriptor": {
+#                    "number": 3,
+#                    "periodType": "REG"
+#                },
+#                "timeInPeriod": "20:00",
+#                "timeRemaining": "00:00",
+#                "situationCode": "1551",
+#                "homeTeamDefendingSide": "left",
+#                "typeCode": 524,
+#                "typeDescKey": "game-end",
+#                "sortOrder": 707
+#            },
+	else:
+		event=pxp['plays'].pop(i)
+		pxp['plays'].append(event)
+
+	print(str(pxp['gameState'])+" == OFF/FINAL")
+	print(str(pxp['gameScheduleState'])+" == OK")
+	print(str(pxp['plays'][-1]['typeDescKey'])+" == shootout-complete/game-end")
+	print(str(pxp['plays'][-1]['typeCode'])+" == 523, 524, 527")
+	print(str(pxp['clock']['running'])+" == false")
+	print(str(pxp['clock']['inIntermission'])+" == false")
+	return pxp
+
+def pl_game_markers(pl):
 	pgstr=-1
 	pgend=-1
 	anthem=-1
 	soc=-1
 	goff=-1
 	gend=-1
+	pend=-1
 	for i in range(0, len(pl)):
 		play=pl[i]
 		if play['Event'] == 'PGSTR':
@@ -2241,7 +2305,9 @@ def game_markers(pl):
 			goff=i
 		elif play['Event'] == 'GEND':
 			gend=i
-	
+		elif play['Event'] == 'PEND':
+			pend=i
+
 	if pgstr == -1:
 		pass
 	if pgend == -1:
@@ -2254,10 +2320,22 @@ def game_markers(pl):
 		pass
 	if gend == -1:
 		pass
+	elif gend != len(pl):
+		event=pl.pop(gend)
+		pl.append(event)
+
+	print("PGSTR = "+str(pgstr))
+	print("PGEND = "+str(pgend))
+	print("ANTHEM= "+str(anthem))
+	print("SOC   = "+str(soc))
+	print("GOFF  = "+str(goff))
+	print("GEND  = "+str(gend))
+	print("PEND  = "+str(pend))
+	#sys.stdin.readline()
 
 	return pl
 
-def period_markers(pl):
+def pl_period_markers(pl):
 	start=[None]
 	end=[None]
 	pstr=[False]
@@ -3102,6 +3180,9 @@ def add_stops(collated, playi):
 			event['PLEvent']="STOP"
 			event['fix']="created"
 			event['Stopped']=True
+			for teampos in collated['teams']:
+				abv=collated['teams'][teampos]['abv']
+				event[abv]=collated['plays'][playi-1][abv]
 
 			reserve=[]
 			while len(play['changes']) > 0 and play['changes'][-1]['dt'] == play['dt']:
@@ -4157,7 +4238,7 @@ def process_game(game):
 		newdata=collate(data)
 
 	if newdata is not None:
-		newdata['version']=0
+		newdata['version']=1
 
 		try:
 			if len(data['PL']) > 0 and (data['PL'][-1]['Event'] == "GEND" or data['PL'][-1]['Event'] == "GOFF" or data['PL'][-1]['Event'] == "EGPID"):
@@ -4327,7 +4408,7 @@ def final_game(game):
 		pass
 
 	try:
-		if game['status'] == 'Final' and game['version'] == 1:
+		if game['status'] == 'Final' and game['version'] == 0:
 			return True
 	except KeyError as e:
 		print(e)
@@ -4373,6 +4454,14 @@ def recover():
 #process_game(make_game_struct('2019040652'))
 #exit(2)
 
+def thread_main(game):
+	print("Game: "+str(game['gamePk']))
+	if not final_game(game):
+		wipe_game_cache(game)
+		process_game(game)
+	else:
+		print("Skipping "+str(game['gamePk']))
+
 def main():
 	if len(sys.argv) > 1:
 		for i in range(1, len(sys.argv)):
@@ -4403,13 +4492,15 @@ def main():
 		while now >= then:
 			datestr=now.strftime('%Y-%m-%d')
 			games=get_schedule(datestr, datestr)
-			for game in games:
-				print("Game: "+str(game['gamePk']))
-				if not final_game(game):
-					wipe_game_cache(game)
-					process_game(game)
-				else:
-					print("Skipping "+str(game['gamePk']))
+			with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+				executor.map(thread_main, games)
+#			for game in games:
+#				print("Game: "+str(game['gamePk']))
+#				if not final_game(game):
+#					wipe_game_cache(game)
+#					process_game(game)
+#				else:
+#					print("Skipping "+str(game['gamePk']))
 			now=now-day
 
 main()
