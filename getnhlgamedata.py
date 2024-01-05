@@ -2214,6 +2214,11 @@ def fixgames(data):
 #			event['typeDescKey']='game-end'
 #			event['sortOrder']=data['PXP']['plays'][-1]['sortOrder']+1
 #			event['fix']='Created'
+	elif int(data['GAME']['gamePk']) == 2022020310:
+		for shifti in range(len(data['PXP']['shifts']['data'])-1, -1, -1):
+			shift=data['PXP']['shifts']['data'][shifti]
+			if shift['playerId'] == 8473575:
+				data['PXP']['shifts']['data'].pop(shifti)
 
 #EGT, PGSTR, PGEND, ANTHEM, PSTR
 #SOC, GOFF, GEND
@@ -2224,6 +2229,7 @@ def fixgames(data):
 
 
 def pxp_game_markers(pxp):
+	return pxp
 	if len(pxp['plays']) == 0:
 		return pxp
 
@@ -2284,58 +2290,34 @@ def pxp_game_markers(pxp):
 	return pxp
 
 def pl_game_markers(pl):
-	pgstr=-1
-	pgend=-1
-	anthem=-1
-	soc=-1
-	goff=-1
-	gend=-1
-	pend=-1
+	return pl
+	events={}
+	find=['PGSTR', 'PGEND', 'ANTHEM', 'SOC', 'GOFF', 'GEND']
 	for i in range(0, len(pl)):
 		play=pl[i]
-		if play['Event'] == 'PGSTR':
-			pgstr=i
-		elif play['Event'] == 'PGEND':
-			pgend=i
-		elif play['Event'] == 'ANTHEM':
-			anthem=i
-		elif play['Event'] == 'SOC':
-			soc=i
-		elif play['Event'] == 'GOFF':
-			goff=i
-		elif play['Event'] == 'GEND':
-			gend=i
-		elif play['Event'] == 'PEND':
-			pend=i
+		if play['Event'] in find:
+			events[play['Event']]=i
 
-	if pgstr == -1:
-		pass
-	if pgend == -1:
-		pass
-	if anthem == -1:
-		pass
-	if soc == -1:
-		pass
-	if goff == -1:
-		pass
-	if gend == -1:
-		pass
-	elif gend != len(pl):
-		event=pl.pop(gend)
-		pl.append(event)
+	for tuple in sorted(events.items(), key=lambda x:x[1], reverse=True):
+		key = tuple[0]
+		i = tuple[1]
 
-	print("PGSTR = "+str(pgstr))
-	print("PGEND = "+str(pgend))
-	print("ANTHEM= "+str(anthem))
-	print("SOC   = "+str(soc))
-	print("GOFF  = "+str(goff))
-	print("GEND  = "+str(gend))
-	print("PEND  = "+str(pend))
-	#sys.stdin.readline()
+		events[key]=pl.pop(i)
+	
+	for prefix in ['ANTHEM', 'PGEND', 'PGSTR']:
+		if prefix not in events:
+			continue
+		pl.insert(0, events[prefix])
+	
+	for suffix in ['SOC', 'GOFF', 'GEND']:
+		if suffix not in events:
+			continue
+		pl.append(events[suffix])
 
 	return pl
 
 def pl_period_markers(pl):
+	return pl
 	start=[None]
 	end=[None]
 	pstr=[False]
@@ -4249,15 +4231,6 @@ def process_game(game):
 			pass
 
 		try:
-			newdata['status']="Ongoing"
-			for note in newdata['notes']:
-				if note['Event'] == 'FINAL':
-					print("Final by PL note")
-					newdata['status']="Final"
-		except KeyError as e:
-			pass
-
-		try:
 			if (data['PXP']['gameState'] == 'FINAL' or data['PXP']['gameState'] == 'OFF') and data['PXP']['gameScheduleState'] == 'OK':
 				print("Final by gameState")
 				if 'status' in newdata and newdata['status'] == 'Ongoing':
@@ -4269,7 +4242,7 @@ def process_game(game):
 					print(str(data['PXP']['clock']['running'])+" == false")
 					print(str(data['PXP']['clock']['inIntermission'])+" == false")
 					print("Game: "+str(newdata['GAME']['gamePk']))
-					exit(5)
+					#exit(5)
 				newdata['status']="Final"
 			else:
 				print("Not final by gameState")
@@ -4296,7 +4269,7 @@ def process_game(game):
 					print(str(data['PXP']['clock']['running'])+" == false")
 					print(str(data['PXP']['clock']['inIntermission'])+" == false")
 					print("Game: "+str(newdata['GAME']['gamePk']))
-					exit(5)
+					#exit(5)
 				newdata['status']="Final"
 			else:
 				print("Not final by typeDescKey")
@@ -4309,7 +4282,7 @@ def process_game(game):
 					print(str(data['PXP']['clock']['running'])+" == false")
 					print(str(data['PXP']['clock']['inIntermission'])+" == false")
 					print("Game: "+str(newdata['GAME']['gamePk']))
-					exit(5)
+					#exit(5)
 				newdata['status']="Ongoing"
 
 			if len(data['PXP']['plays']) > 0 and (data['PXP']['plays'][-1]['typeCode'] == 523 or data['PXP']['plays'][-1]['typeCode'] == 524 or data['PXP']['plays'][-1]['typeCode'] == 527):
@@ -4350,12 +4323,23 @@ def process_game(game):
 #				if 'status' in newdata and newdata['status'] == 'Final':
 #				newdata['status']="Ongoing"
 
+			newdata['status']="Ongoing"
+			for note in newdata['notes']:
+				if note['Event'] == 'FINAL':
+					print("Final by PL note")
+					newdata['status']="Final"
+					break
+
 		except KeyError as e:
 			pass
 
 		print("Writing game: "+str(season)+"/"+str(type)+"/"+str(gamenum))
 		f=open(gamepath, 'w')
 		f.write(json.dumps(newdata))
+		f.close()
+	else:
+		f=open(gamepath+"-failed", 'w')
+		f.write(json.dumps(data))
 		f.close()
 
 def wipe_game_cache(game):
@@ -4408,7 +4392,7 @@ def final_game(game):
 		pass
 
 	try:
-		if game['status'] == 'Final' and game['version'] == 0:
+		if game['status'] == 'Final' and game['version'] == 1:
 			return True
 	except KeyError as e:
 		print(e)
@@ -4464,9 +4448,10 @@ def thread_main(game):
 
 def main():
 	if len(sys.argv) > 1:
+		games=[]
 		for i in range(1, len(sys.argv)):
-			gamepk=sys.argv[i]
-			if (re.match('[0-9]+[/][0-9]+[/][0-9]+', gamepk)):
+			if re.match('[0-9]+[/][0-9]+[/][0-9]+', sys.argv[i]):
+				gamepk=sys.argv[i]
 				season=re.sub('[/].*$', '', gamepk)
 				type=re.sub('^[^/]*[/]', '', gamepk)
 				type=re.sub('[/].*$', '', type)
@@ -4474,20 +4459,37 @@ def main():
 				gamepk = season[0:4]
 				gamepk = gamepk + type
 				gamepk = gamepk + gamenum
+				game=make_game_struct(gamepk)
+				games.append(game)
+			elif re.search('^[0-9][0-9][0-9][0-9]$', sys.argv[i]):
+				day=datetime.timedelta(days=1)
+				start=datetime.datetime(int(sys.argv[i]), 8, 1)
+				end=datetime.datetime(int(sys.argv[i])+1, 7, 31)
+				now=datetime.datetime.today()
+				while start <= end:
+					if start > now:
+						break
+					datestr=start.strftime('%Y-%m-%d')
+					dategames=get_schedule(datestr)
+					for game in dategames:
+						games.append(game)
+					start=start+day
+		with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+			executor.map(thread_main, games)
 
-			print("Processing "+gamepk)
-			game=make_game_struct(gamepk)
-			if not final_game(game):
-				print("  Need to process!")
-				wipe_game_cache(game)
-				process_game(game)
-			else:
-				print("  Skipping!")
+#		for game in games:
+##			print("Processing "+gamepk)
+#			if not final_game(game):
+#				print("  Need to process!")
+#				wipe_game_cache(game)
+#				process_game(game)
+#			else:
+#				print("  Skipping!")
 
 	else:
 		day=datetime.timedelta(days=1)
 		now=datetime.datetime.today()
-		then=datetime.datetime(2000, 8, 1)
+		then=datetime.datetime(2019, 7, 12)
 #		then=now
 		while now >= then:
 			datestr=now.strftime('%Y-%m-%d')
