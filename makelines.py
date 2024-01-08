@@ -204,7 +204,7 @@ def start_line(game, oldshifti, newshifti, playi, team, linekey):
 
 	play=game['plays'][playi]
 	if debug:
-		print("   Starting shift #"+str(newshifti)+" for "+linekey+" at play "+str(playi)+" dt "+str(play['dt']))
+		print("   Starting shift #"+str(newshifti)+" for "+team+" "+linekey+" at play "+str(playi)+" dt "+str(play['dt']))
 
 	shift={}
 	shift['start']=playi
@@ -215,7 +215,6 @@ def start_line(game, oldshifti, newshifti, playi, team, linekey):
 		shift['last']=oldshifti
 	game['lines'][team]['shifts']['line'].insert(newshifti, shift)
 	game['lines'][team]['line'][linekey]['shifts'].append(newshifti)
-
 	return game
 
 def get_name(game, nhlid):
@@ -231,6 +230,7 @@ def get_line_str(game, linekey):
 	return ""
 
 def break_line(game, team, linekey):
+	print(team+" line "+linekey+" on faceoff")
 	lineinfo=game['lines'][team]['line'][linekey]
 	positions=lineinfo['positions']
 
@@ -598,12 +598,12 @@ def add_lines(game):
 				fotype=None
 
 				abv=game['teams'][teampos]['abv']
-				if game['lines'][team]['last']['line'] != -1:
+				if game['lines'][abv]['last']['line'] == -1:
 					continue
 
-				curshifti=game['lines'][team]['last']['line'][abv]
-				curshift=game['lines'][team]['shifts']['line'][curshifti]
-				lineinfo=game['lines'][team]['line'][curshift['key']]
+				curshifti=game['lines'][abv]['last']['line']
+				curshift=game['lines'][abv]['shifts']['line'][curshifti]
+				lineinfo=game['lines'][abv]['line'][curshift['key']]
 				if 'faceoffs' not in lineinfo:
 					lineinfo['faceoffs']={}
 					lineinfo['faceoffs']['L']={}
@@ -650,7 +650,7 @@ def add_lines(game):
 				if fotaker not in lineinfo['faceoffs']['ALL']:
 					lineinfo['faceoffs']['ALL'][fotaker]=0
 				lineinfo['faceoffs']['ALL'][fotaker]=lineinfo['faceoffs']['ALL'][fotaker]+1
-				game['lines'][team]['line'][curshift['key']]=lineinfo
+				game['lines'][abv]['line'][curshift['key']]=lineinfo
 
 				foplayer=game['players'][str(fotaker)]
 
@@ -664,11 +664,11 @@ def add_lines(game):
 #						maxfos=lineinfo['faceoffs']['ALL'][p]
 #						maxplayer=p
 
-				game['lines'][team]['line'][curshift['key']]=lineinfo
+				game['lines'][abv]['line'][curshift['key']]=lineinfo
 
 				if 'MakeC' not in lineinfo or lineinfo['MakeC'] != maxplayer:
-					game['lines'][team]['line'][curshift['key']]['MakeC']=maxplayer
-					game=break_line(game, team, linekey)
+					game['lines'][abv]['line'][curshift['key']]['MakeC']=maxplayer
+					game=break_line(game, abv, curshift['key'])
 
 		for abv in game['lines']:
 			shifti=game['lines'][abv]['last']['line']
