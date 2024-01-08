@@ -4479,6 +4479,34 @@ def thread_main(game):
 	else:
 		print("Skipping "+str(game['gamePk']))
 
+def get_season(season):
+	games=[]
+	start=int(season)
+	end=int(season)
+	if start > 10000:
+		start=int(start/10000)
+		end=start
+	end=end+1
+	season=(start*10000)+end
+
+	start=datetime.datetime(start, 7, 1)
+	end=datetime.datetime(end, 10, 1)
+	now=datetime.datetime.today()
+	if end > now:
+		end=now
+
+	day=datetime.timedelta(days=1)
+	while start <= end:
+		datestr=start.strftime('%Y-%m-%d')
+		dategames=get_schedule(datestr)
+		for game in dategames:
+			if int(game['season']) == int(season):
+				games.append(game)
+			else:
+				print(str(game['season'])+"!="+str(season))
+		start=start+day
+	return games
+
 def main():
 	if len(sys.argv) > 1:
 		games=[]
@@ -4495,19 +4523,12 @@ def main():
 				game=make_game_struct(gamepk)
 				games.append(game)
 			elif re.search('^[0-9][0-9][0-9][0-9]$', sys.argv[i]):
-				day=datetime.timedelta(days=1)
-				start=datetime.datetime(int(sys.argv[i]), 8, 1)
-				end=datetime.datetime(int(sys.argv[i])+1, 7, 31)
-				now=datetime.datetime.today()
-				while start <= end:
-					if start > now:
-						break
-					datestr=start.strftime('%Y-%m-%d')
-					dategames=get_schedule(datestr)
-					for game in dategames:
-						games.append(game)
-					start=start+day
-		with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+				games=get_season(sys.argv[i])
+			elif re.search('^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$', sys.argv[i]):
+				games=get_season(sys.argv[i])
+			elif re.search('^[0-9][0-9][0-9][0-9]0[0-9][0-9][0-9][0-9][0-9]$', sys.argv[i]):
+				games.append(make_game_struct(sys.argv[i]))
+		with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
 			executor.map(thread_main, games)
 
 #		for game in games:
@@ -4527,7 +4548,7 @@ def main():
 		while now >= then:
 			datestr=now.strftime('%Y-%m-%d')
 			games=get_schedule(datestr, datestr)
-			with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+			with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
 				executor.map(thread_main, games)
 #			for game in games:
 #				print("Game: "+str(game['gamePk']))
