@@ -2160,6 +2160,29 @@ def add_pl_stop(data, playi):
 	return data
 
 def fixgames(data):
+	#Season fixes
+	if int(data['GAME']['gamePk']) < 2021010001:
+		teamfix=False
+		for i in range(0, len(data['PL'])):
+			event=data['PL'][i]
+			fixteams=['T.B', 'N.J', 'L.A', 'S.J']
+			fixteamsre=['T\.B', 'N\.J', 'L\.A', 'S\.J']
+			fixed=['TBL', 'NJD', 'LAK', 'SJS']
+			for teami in range(0, len(fixteams)):
+				if fixteams[teami]+" On Ice" in event:
+					teamfix=True
+					event[fixed[teami]+" On Ice"]=re.sub(fixteamsre[teami]+" #", fixed[teami]+" #", event[fixteams[teami]+" On Ice"])
+					del(event[fixteams[teami]+" On Ice"])
+				event['OldDescription']=event['Description']
+				event['Description']=re.sub(fixteamsre[teami], fixed[teami], event['OldDescription'])
+
+				if teamfix == False:
+					break
+			if teamfix == False:
+				break
+			data['PL'][i]=event
+
+	#Game specific fixes
 #	if int(data['GAME']['gamePk']) == 2023010013:
 #		for playi in range(0, len(data['PL'])):
 #			play=data['PL'][playi]
@@ -2169,14 +2192,13 @@ def fixgames(data):
 		print("Fixing up SEA #4 DANNY DEKEYSER")
 		data=rm_player(data, "SEA #4 Danny DeKeyser")
 		data=add_player(data, "VAN #4 Danny DeKeyser", 8477967, pos="C", scratch=False)
-		print("   Inserted roster entry")
 
 	elif int(data['GAME']['gamePk']) == 2021010032:
 		data=add_player(data, "NSH #59 Nicholas Porco", 8481665, pos="LW", scratch=False)
 	elif int(data['GAME']['gamePk']) == 2021010006:
 		data=add_player(data, "NYI #64 Alex Jefferies", 8482154, pos="L", scratch=False)
 	elif int(data['GAME']['gamePk']) == 2021010001:
-		#This game has a trivial PL
+		#This game has a trivial PL and can't be processed
 		return None
 	elif int(data['GAME']['gamePk']) == 2022010014:
 		data['TV']["45 JAKE BISCHOFF"]=data['TV']["45 JAKE  BISCHOFF"]
@@ -2218,6 +2240,11 @@ def fixgames(data):
 		for shifti in range(len(data['PXP']['shifts']['data'])-1, -1, -1):
 			shift=data['PXP']['shifts']['data'][shifti]
 			if shift['playerId'] == 8473575:
+				data['PXP']['shifts']['data'].pop(shifti)
+	elif int(data['GAME']['gamePk']) == 2022021053:
+		for shifti in range(len(data['PXP']['shifts']['data'])-1, -1, -1):
+			shift=data['PXP']['shifts']['data'][shifti]
+			if shift['playerId'] == 8476433:
 				data['PXP']['shifts']['data'].pop(shifti)
 
 #EGT, PGSTR, PGEND, ANTHEM, PSTR
@@ -4379,6 +4406,12 @@ def wipe_game_cache(game):
 def final_game(game):
 	gamepath=get_game_path(game)
 	game={}
+	try:
+		os.unlink(gamepath+"-failed")
+		return False
+	except Exception as e:
+		pass
+
 	try:
 		f=open(gamepath, 'r')
 		gamedoc=''.join(f.readlines())
