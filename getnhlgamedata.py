@@ -320,7 +320,6 @@ def get_schedule(start, end=None):
 	games=[]
 	if 'games' in sched:
 		for game in sched['games']:
-			print(json.dumps(game, indent=3))
 			entry={}
 			entry['away']=game['awayTeam']['abbrev']
 			entry['home']=game['homeTeam']['abbrev']
@@ -4509,8 +4508,8 @@ def get_season(season):
 	return games
 
 def main():
+	games=[]
 	if len(sys.argv) > 1:
-		games=[]
 		for i in range(1, len(sys.argv)):
 			if re.match('[0-9]+[/][0-9]+[/][0-9]+', sys.argv[i]):
 				gamepk=sys.argv[i]
@@ -4529,35 +4528,18 @@ def main():
 				games=get_season(sys.argv[i])
 			elif re.search('^[0-9][0-9][0-9][0-9]0[0-9][0-9][0-9][0-9][0-9]$', sys.argv[i]):
 				games.append(make_game_struct(sys.argv[i]))
-		with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
-			executor.map(thread_main, games)
-
-#		for game in games:
-##			print("Processing "+gamepk)
-#			if not final_game(game):
-#				print("  Need to process!")
-#				wipe_game_cache(game)
-#				process_game(game)
-#			else:
-#				print("  Skipping!")
 
 	else:
 		day=datetime.timedelta(days=1)
 		now=datetime.datetime.today()
 		then=datetime.datetime(2019, 7, 12)
-#		then=now
 		while now >= then:
 			datestr=now.strftime('%Y-%m-%d')
-			games=get_schedule(datestr, datestr)
-			with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
-				executor.map(thread_main, games)
-#			for game in games:
-#				print("Game: "+str(game['gamePk']))
-#				if not final_game(game):
-#					wipe_game_cache(game)
-#					process_game(game)
-#				else:
-#					print("Skipping "+str(game['gamePk']))
+			for game in get_schedule(datestr, datestr):
+				games.append(game)
 			now=now-day
+
+	with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+		executor.map(thread_main, games)
 
 main()
