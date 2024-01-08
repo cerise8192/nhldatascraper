@@ -320,11 +320,15 @@ def get_schedule(start, end=None):
 	games=[]
 	if 'games' in sched:
 		for game in sched['games']:
+			print(json.dumps(game, indent=3))
 			entry={}
+			entry['away']=game['awayTeam']['abbrev']
+			entry['home']=game['homeTeam']['abbrev']
 			entry['gamePk']=game['id']
 			entry['gameType']=game['gameType']
 			entry['season']=game['season']
 			entry['link']=game['gameCenterLink']
+			entry['clock']=game['clock']
 			games.append(entry)
 	return games
 
@@ -4467,9 +4471,6 @@ def recover():
 				if not final_game(game):
 					wipe_game_cache(game)
 					process_game(game)
-
-#process_game(make_game_struct('2019040652'))
-#exit(2)
 
 def thread_main(game):
 	print("Game: "+str(game['gamePk']))
