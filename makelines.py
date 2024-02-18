@@ -84,6 +84,9 @@ def read_game(season, season_type, gamenum):
 		f=open(gamepath)
 		game=f.readlines()
 		f.close()
+	except FileNotFoundError as e:
+		print(e)
+		return game
 	except Exception as e:
 		print(e)
 		exit(1)
@@ -134,6 +137,37 @@ def end_line(game, oldshifti, newshifti, playi, team):
 	if newshifti is not None:
 		oldshift['next']=newshifti
 	game['lines'][team]['shifts']['line'][oldshifti]=oldshift
+	startstr=oldshift['start']
+	while startstr < playi:
+		strength=game['plays'][startstr]['Strength']
+		endstr=startstr+1
+		while endstr < playi:
+			if 'Strength' not in game['plays'][endstr]:
+				play=game['plays'][endstr]
+				play['Strength']=str(len(play[game['teams']['home']['abv']]['onice']))
+				play['Strength']=play['Strength']+'v'
+				play['Strength']=play['Strength']+str(len(play[game['teams']['away']['abv']]['onice']))
+				game['plays'][endstr]=play
+			if strength != game['plays'][endstr]['Strength']:
+				break
+			endstr=endstr+1
+		if team == game['teams']['away']['abv']:
+			ra=strength.split('v')
+			strength=ra[1]+'v'+ra[0]
+		strshift={}
+		strshift['shift']=oldshifti
+		strshift['strength']=strength
+		strshift['start']=startstr
+		strshift['startdt']=game['plays'][startstr]['dt']
+		strshift['end']=endstr
+		strshift['enddt']=game['plays'][endstr]['dt']
+		strshift['toi']=int(strshift['enddt'])-int(strshift['startdt'])
+		strshift['key']=oldshift['key']
+		if strength not in game['lines'][team]:
+			game['lines'][team][strength]={}
+			game['lines'][team][strength]['shifts']=[]
+		game['lines'][team][strength]['shifts'].append(strshift)
+		startstr=endstr
 
 	key=oldshift['key']
 	game['lines'][team]['line'][key]['toi']=game['lines'][team]['line'][key]['toi']+oldshift['toi']
@@ -499,29 +533,6 @@ def break_line(game, team, linekey):
 
 	return game
 
-def part_line(game, oldshifti, newshifti, playi):
-	newinfo=game['lines'][team]['line'][linekey]
-		
-	for part in ['fline', 'dline', 'goalie']:
-		if oldshifti is not None:
-			oldshift=game['lines'][team]['shifts']['line'][oldshifti]
-			oldinfo=game['lines'][team]['line'][oldshift['key']]
-			if oldinfo[part+'key'] == newinfo[part+'key']:
-				continue
-			oldshift=game['lines'][team]['shifts'][part][oldshifti]
-
-	#lineinfo['flinestrid']
-	#lineinfo['dlinestrid']
-	#lineinfo['goaliestrid']
-	#lineinfo['flinekey']
-	#lineinfo['dlinekey']
-	#lineinfo['goaliekey']
-	#lineinfo['flinestr']
-	#lineinfo['dlinestr']
-	#lineinfo['goaliestr']
-
-
-
 
 def add_lines(game):
 	debug=True
@@ -576,6 +587,29 @@ def add_lines(game):
 					oldpartshift['end']=playi
 					oldpartshift['toi']=oldpartshift['enddt']-oldpartshift['startdt']
 					game['lines'][team]['shifts'][part][oldpartshifti]=oldpartshift
+					startstr=oldpartshift['start']
+					while startstr < playi:
+						endstr=startstr+1
+						strength=game['plays'][startstr]['Strength']
+						while endstr < playi:
+							if game['plays'][endstr]['Strength'] != strength:
+								break
+							endstr=endstr+1
+						strshift={}
+						strshift['line']=oldshifti
+						strshift['key']=oldpartshift['key']
+						strshift['start']=startstr
+						strshift['startdt']=game['plays'][startstr]['dt']
+						strshift['end']=endstr
+						strshift['enddt']=game['plays'][endstr]['dt']
+						strshift['toi']=int(strshift['enddt'])-int(strshift['startdt'])
+						strshift['team']=team
+						strshift['linetype']=part
+						if strength not in game['lines'][team][part]:
+							game['lines'][team][part][strength]=[]
+						game['lines'][team][part][strength].append(strshift)
+
+						startstr=endstr
 
 					oldpartinfo=game['lines'][team][part][oldpartshift['key']]
 					oldpartinfo['toi']=oldpartinfo['toi']+oldpartshift['toi']
@@ -700,8 +734,14 @@ def main():
 			continue
 
 		game = read_game(season, type, gamenum)
-		if 'lines' in game:
+		if game is None:
+			print("No data")
 			continue
+
+		if 'lines' in game:
+			del(game['lines'])
+#			print("Already processed")
+#			continue
 
 		game = add_lines(game)
 		write_game(game)

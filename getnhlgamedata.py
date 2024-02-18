@@ -327,7 +327,8 @@ def get_schedule(start, end=None):
 			entry['gameType']=game['gameType']
 			entry['season']=game['season']
 			entry['link']=game['gameCenterLink']
-			entry['clock']=game['clock']
+			if 'clock' in game:
+				entry['clock']=game['clock']
 			games.append(entry)
 	return games
 
@@ -997,6 +998,7 @@ def get_ro(game):
 def get_teams(data, collated):
 	collated['teams']={}
 	collated['lookup']['teams']={}
+	collated['exclude']['teams']={}
 	collated=get_teams_pxp(data, collated)
 	collated=get_teams_live(data, collated)
 	return collated
@@ -1004,6 +1006,7 @@ def get_teams(data, collated):
 def get_teams_live(data, collated):
 	if 'LIVE' not in data:
 		return collated
+	collated['LIVE']=data['LIVE']
 	return collated
 
 def get_teams_pxp(data, collated):
@@ -1011,26 +1014,33 @@ def get_teams_pxp(data, collated):
 		return collated
 	debug=False
 	for teamloc in ['away', 'home']:
+		print("   "+teamloc)
 		teamname=data['PXP'][teamloc+'Team']['name']
 		if 'default' in teamname:
 			teamname=teamname['default']
+		print("      Name: "+teamname)
 		abv=data['PXP'][teamloc+'Team']['abbrev']
+		print("      Abv : "+abv)
 		teamid=data['PXP'][teamloc+'Team']['id']
+		print("      Id  : "+str(teamid))
 
 		key=teamloc
-		print(json.dumps(teamname, indent=3))
 		targets=get_name_combos(teamname)
 		targets.append(key)
 		targets.append(teamloc)
 		targets.append(teamloc+"Team")
 		targets.append(str(teamid))
+		targets.append(abv)
+
 		for n in targets:
 			if n in collated['lookup']['teams']:
-				key=collated['lookup']['teams'][n]
-				break
+				collated['exclude']['teams'][n]=True
+				del(collated['lookup']['teams'][n])
 
 		for t in targets:
-			collated['lookup']['teams'][t]=key
+			if t not in collated['exclude']['teams']:
+				print("      Target: "+str(t))
+				collated['lookup']['teams'][t]=key
 
 		collated['teams'][teamloc]={}
 		collated['teams'][teamloc]['name']=teamname
@@ -1242,6 +1252,7 @@ def get_players(data, collated):
 			print(key)
 			print(e)
 
+		print(str(key))
 		if 'Team' not in collated['players'][key]:
 			if 'PXP' in collated['players'][key]:
 				collated['players'][key]['Team']=collated['players'][key]['PXP']['Team']
@@ -1726,9 +1737,13 @@ def get_shifts(data, collated):
 	for key in collated['players']:
 		collated['players'][key]['shifts']={}
 
+	print("   THV")
 	collated=get_shifts_thv(data, collated)
+	print("   PXP")
 	collated=get_shifts_pxp(data, collated)
+	print("   Merge")
 	collated=merge_shifts(collated)
+	print("   Done")
 	return collated
 
 def merge_shifts(collated):
@@ -1736,8 +1751,10 @@ def merge_shifts(collated):
 		if 'shifts' not in collated['players'][key]:
 			continue
 
+		print(str(key))
 		shiftsbydt={}
 		if 'THV' in collated['players'][key]['shifts']:
+			print("   THV")
 			i=0
 			while i < len(collated['players'][key]['shifts']['THV']):
 				thvshift=collated['players'][key]['shifts']['THV'][i]
@@ -1769,6 +1786,7 @@ def merge_shifts(collated):
 				i=i+1
 
 		if 'PXP' in collated['players'][key]['shifts']:
+			print("   PXP")
 			i=0
 			while i < len(collated['players'][key]['shifts']['PXP']):
 				pxpshift=collated['players'][key]['shifts']['PXP'][i]
@@ -1799,37 +1817,114 @@ def merge_shifts(collated):
 
 				i=i+1
 
+		#Delete the old shifts tree and replace it with the collated one
+		print("   replace")
+		found={}
 		for shifttype in ['PXP', 'THV']:
 			if shifttype in collated['players'][key]['shifts']:
 				del(collated['players'][key]['shifts'][shifttype])
-
+				found[shifttype]=True
 		collated['players'][key]['shifts']=[]
+		collated['players'][key]['shiftdiscard']=[]
 
+		#Sort shifts by starting DT
+		print("   sort")
 		shifts=sorted(shiftsbydt.items(), key=lambda x:x[0])
 		for tuple in shifts:
-			collated['players'][key]['shifts'].append(tuple[1][0])
+			missing=False
+			for shifttype in found:
+				if shifttype not in tuple[1][0]:
+					missing=True
+					break
+			if not missing:
+				collated['players'][key]['shifts'].append(tuple[1][0])
+			else:
+				collated['players'][key]['shiftdiscard'].append(tuple[1][0])
 
+		#Find shifts which overlap by finding ones with a start before the
+		#  current shift's end.
+		print("   overlap")
 		shifti=0
 		while shifti < len(collated['players'][key]['shifts']):
 			shift=collated['players'][key]['shifts'][shifti]
 			shiftj=shifti+1
 			while shiftj < len(collated['players'][key]['shifts']):
 				overshift=collated['players'][key]['shifts'][shiftj]
+				#This case can only happen if shifts are incorrectly sorted.
+				#  That should never happen.
+				if overshift['StartDT'] < shift['StartDT'] and overshift['EndDT'] < shift['StartDT']:
+					shiftj=shiftj+1
+					continue
+
+				#This should mean that we're done because shifts should be
+				#  sorted, so no further overshifts will have a start which
+				#  overlaps
 				if overshift['StartDT'] > shift['EndDT']:
 					break
 
-				if overshift['StartDT'] <= shift['EndDT']:
-					if overshift['EndDT'] > shift['EndDT']:
-						collated['players'][key]['shifts'][shifti]['EndDT']=overshift['EndDT']
-					if 'overlap' not in collated['players'][key]['shifts'][shifti]:
-						collated['players'][key]['shifts'][shifti]['overlap']=[]
-					collated['players'][key]['shifts'][shifti]['overlap'].append(overshift)
-					shifti=shifti-1
+				#Trust THV over PXP
+				if 'THV' in shift and 'THV' not in overshift:
+					overshift['reason']="No THV"
+					collated['players'][key]['shiftdiscard'].append(overshift)
 					collated['players'][key]['shifts'].pop(shiftj)
+					continue
+				elif 'THV' in overshift and 'THV' not in shift:
+					shift['reason']="No THV"
+					collated['players'][key]['shiftdiscard'].append(shift)
+					collated['players'][key]['shifts'].pop(shifti)
+					shifti=shift-1
 					break
-					
-				shiftj=shiftj+1
+
+				#THV in both.  Trust the one with PXP too.
+				if 'PXP' in shift and 'PXP' not in overshift:
+					overshift['reason']="Overlap with fewer sources"
+					collated['players'][key]['shiftdiscard'].append(overshift)
+					collated['players'][key]['shifts'].pop(shiftj)
+					continue
+				elif 'PXP' not in shift and 'PXP' in overshift:
+					shift['reason']="Overlap with fewer sources"
+					collated['players'][key]['shiftdiscard'].append(shift)
+					collated['players'][key]['shifts'].pop(shifti)
+					shifti=shifti-1
+					break
+
+				#Both have THV and PXP components.  So, absorb & merge?
+				newshift={}
+				if shift['StartDT'] < overshift['StartDT']:
+					newshift['StartDT']=shift['StartDT']
+				else:
+					newshift['StartDT']=overshift['StartDT']
+
+				if shift['EndDT'] > overshift['EndDT']:
+					newshift['EndDT']=shift['EndDT']
+				else:
+					newshift['EndDT']=overshift['EndDT']
+
+				if shift['nhlid'] != overshift['nhlid']:
+					print("This player has shifts for two nhlids?!")
+					exit(85)
+
+				newshift['nhlid']=shift['nhlid']
+				newshift['overlap']=[]
+				newshift['overlap'].append(shift)
+				if 'overlap' in shift:
+					for e in shift['overlap']:
+						newshift['overlap'].append(e)
+					del(shift['overlap'])
+
+				newshift['overlap'].append(overshift)
+				if 'overlap' in overshift:
+					for e in overshift['overlap']:
+						newshift['overlap'].append(e)
+					del(overshift['overlap'])
+
+				collated['players'][key]['shifts'][shifti]=newshift
+				collated['players'][key]['shifts'].pop(shiftj)
+				shifti=shifti-1
+				break
+
 			shifti=shifti+1
+		print("   done")
 
 	return collated
 
@@ -1838,7 +1933,7 @@ def get_shifts_pxp(data, collated):
 		return collated
 	
 	for shift in data['PXP']['shifts']['data']:
-		print(json.dumps(shift, indent=3))
+		#print(json.dumps(shift, indent=3))
 		key = shift['playerId']
 		if key is None:
 			continue
@@ -2172,17 +2267,16 @@ def fixgames(data):
 			fixteamsre=['T\.B', 'N\.J', 'L\.A', 'S\.J']
 			fixed=['TBL', 'NJD', 'LAK', 'SJS']
 			for teami in range(0, len(fixteams)):
+				print("Looking for "+fixteams[teami]+" On Ice")
 				if fixteams[teami]+" On Ice" in event:
 					teamfix=True
 					event[fixed[teami]+" On Ice"]=re.sub(fixteamsre[teami]+" #", fixed[teami]+" #", event[fixteams[teami]+" On Ice"])
 					del(event[fixteams[teami]+" On Ice"])
 				event['OldDescription']=event['Description']
 				event['Description']=re.sub(fixteamsre[teami], fixed[teami], event['OldDescription'])
-
-				if teamfix == False:
-					break
 			if teamfix == False:
 				break
+
 			data['PL'][i]=event
 
 	#Game specific fixes
@@ -2248,6 +2342,31 @@ def fixgames(data):
 		for shifti in range(len(data['PXP']['shifts']['data'])-1, -1, -1):
 			shift=data['PXP']['shifts']['data'][shifti]
 			if shift['playerId'] == 8476433:
+				data['PXP']['shifts']['data'].pop(shifti)
+	elif int(data['GAME']['gamePk']) == 2021020741:
+		for shifti in range(len(data['PXP']['shifts']['data'])-1, -1, -1):
+			shift=data['PXP']['shifts']['data'][shifti]
+			if shift['playerId'] == 8478039 and shift['period'] == 2:
+				data['PXP']['shifts']['data'].pop(shifti)
+	elif int(data['GAME']['gamePk']) == 2021021012:
+		for shifti in range(len(data['PXP']['shifts']['data'])-1, -1, -1):
+			shift=data['PXP']['shifts']['data'][shifti]
+			if shift['playerId'] == 8478039:
+				data['PXP']['shifts']['data'].pop(shifti)
+	elif int(data['GAME']['gamePk']) == 2021021227:
+		for shifti in range(len(data['PXP']['shifts']['data'])-1, -1, -1):
+			shift=data['PXP']['shifts']['data'][shifti]
+			if shift['playerId'] == 8475234:
+				data['PXP']['shifts']['data'].pop(shifti)
+	elif int(data['GAME']['gamePk']) == 2020020060:
+		for shifti in range(len(data['PXP']['shifts']['data'])-1, -1, -1):
+			shift=data['PXP']['shifts']['data'][shifti]
+			if shift['playerId'] == 8470880:
+				data['PXP']['shifts']['data'].pop(shifti)
+	elif int(data['GAME']['gamePk']) == 2020020175:
+		for shifti in range(len(data['PXP']['shifts']['data'])-1, -1, -1):
+			shift=data['PXP']['shifts']['data'][shifti]
+			if shift['playerId'] == 8475717:
 				data['PXP']['shifts']['data'].pop(shifti)
 
 #EGT, PGSTR, PGEND, ANTHEM, PSTR
@@ -4368,6 +4487,8 @@ def process_game(game):
 		f.write(json.dumps(newdata))
 		f.close()
 	else:
+		wipe_game_cache(game)
+		print("Writing failure: "+str(season)+"/"+str(type)+"/"+str(gamenum))
 		f=open(gamepath+"-failed", 'w')
 		f.write(json.dumps(data))
 		f.close()
@@ -4473,6 +4594,10 @@ def recover():
 
 def thread_main(game):
 	print("Game: "+str(game['gamePk']))
+
+#	if 'home' in game and 'away' in game and game['home'] != 'MTL' and game['away'] != 'MTL':
+#		print("Skipping "+str(game['gamePk'])+" because of Montreal")
+
 	if not final_game(game):
 		wipe_game_cache(game)
 		process_game(game)
@@ -4502,8 +4627,6 @@ def get_season(season):
 		for game in dategames:
 			if int(game['season']) == int(season):
 				games.append(game)
-			else:
-				print(str(game['season'])+"!="+str(season))
 		start=start+day
 	return games
 
