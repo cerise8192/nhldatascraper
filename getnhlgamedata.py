@@ -3364,7 +3364,6 @@ def merge_loop(data, collated):
 	playi=0
 	collated['temp']['toi']=build_toi_tree(collated)
 	
-	stopped=True
 	while playi < len(collated['plays']):
 		#Use lists of players to create off/stay/on
 		collated=get_onice_one(collated, playi)
@@ -3387,6 +3386,10 @@ def merge_loop(data, collated):
 		if 'changes' in collated['plays'][playi]:
 			addplays=collated['plays'][playi]['changes']
 			for change in addplays:
+				if 'Stopped' in collated['plays'][playi]:
+					change['Stopped']=True
+				else:
+					change['Stopped']=False
 				collated['plays'].insert(playi, change)
 				playi=playi+1
 			del(collated['plays'][playi]['changes'])
@@ -3449,7 +3452,7 @@ def print_play(collated, playi):
 		line=line+'??? '
 
 	flags=""
-	if 'Stopped' in play:
+	if 'Stopped' in play and play['Stopped']:
 		flags=flags+"S "
 	if 'Icing' in play:
 		flags=flags+"I("+play['Icing']+") "
