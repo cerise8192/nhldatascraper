@@ -102,75 +102,132 @@ def makelineinfo(game, team, linekey):
 	lineinfo={}
 	lineinfo['key']=linekey
 	lineinfo['team']=team
+	lineinfo['situation']={}
 	lineinfo['shifts']=[]
 	lineinfo['toi']=0
 	game['lines'][team]['line'][linekey]=lineinfo
-	game=make_positions(game, team, linekey)
-	game=break_line(game, team, linekey)
 
-	lineinfo=game['lines'][team]['line'][linekey]
-	for part in ['fline', 'dline', 'goalie']:
-		if lineinfo[part+'key'] not in game['lines'][team][part]:
-			partlineinfo={}
-			partlineinfo['strid']=lineinfo[part+'strid']
-			partlineinfo['str']=lineinfo[part+'str']
-			partlineinfo['key']=lineinfo[part+'key']
-			partlineinfo['team']=team
-			partlineinfo['shifts']=[]
-			partlineinfo['toi']=0
-			game['lines'][team][part][lineinfo[part+'key']]=partlineinfo
+	game=make_positions(game, team, linekey)
 	return game
 
-def end_line(game, oldshifti, newshifti, playi, team):
+def end_line(game, playi, team=None):
 	debug=True
-	if oldshifti is None:
-		return game
 
 	play = game['plays'][playi]
-	oldshift = game['lines'][team]['shifts']['line'][oldshifti]
-	if debug:
-		print("   Ending shift #"+str(oldshifti)+" for "+oldshift['key']+" at play "+str(playi)+" dt "+str(play['dt']))
+
+	if team is None:
+		if 'Team' in play:
+			team = play['Team']
+
+	if game['lines'][team]['last']['line'] == -1:
+		return game
+	oldshifti=game['lines'][team]['last']['line']
+
+	otherteam=None
+	for teampos in game['teams']:
+		if game['teams'][teampos]['abv'] != team:
+			otherteam=game['teams'][teampos]['abv']
+			break
+
+	oldshift = game['lines']['shifts']['line'][oldshifti]
 
 	oldshift['end']=playi
 	oldshift['enddt']=play['dt']
-	oldshift['toi']=oldshift['enddt']-oldshift['startdt']
-	if newshifti is not None:
-		oldshift['next']=newshifti
-	game['lines'][team]['shifts']['line'][oldshifti]=oldshift
-	startstr=oldshift['start']
-	while startstr < playi:
-		strength=game['plays'][startstr]['Strength']
-		endstr=startstr+1
-		while endstr < playi:
-			if 'Strength' not in game['plays'][endstr]:
-				play=game['plays'][endstr]
-				play['Strength']=str(len(play[game['teams']['home']['abv']]['onice']))
-				play['Strength']=play['Strength']+'v'
-				play['Strength']=play['Strength']+str(len(play[game['teams']['away']['abv']]['onice']))
-				game['plays'][endstr]=play
-			if strength != game['plays'][endstr]['Strength']:
-				break
-			endstr=endstr+1
-		if team == game['teams']['away']['abv']:
-			ra=strength.split('v')
-			strength=ra[1]+'v'+ra[0]
-		strshift={}
-		strshift['shift']=oldshifti
-		strshift['strength']=strength
-		strshift['start']=startstr
-		strshift['startdt']=game['plays'][startstr]['dt']
-		strshift['end']=endstr
-		strshift['enddt']=game['plays'][endstr]['dt']
-		strshift['toi']=int(strshift['enddt'])-int(strshift['startdt'])
-		strshift['key']=oldshift['key']
-		if strength not in game['lines'][team]:
-			game['lines'][team][strength]={}
-			game['lines'][team][strength]['shifts']=[]
-		game['lines'][team][strength]['shifts'].append(strshift)
-		startstr=endstr
+	oldshift['toi']=int(oldshift['enddt'])-int(oldshift['startdt'])
 
-	key=oldshift['key']
-	game['lines'][team]['line'][key]['toi']=game['lines'][team]['line'][key]['toi']+oldshift['toi']
+	if oldshift['toi'] == 0:
+		if debug:
+			print("   Eliminating shift #"+str(oldshifti)+" for "+oldshift['key']+" at play "+str(playi)+" dt "+str(play['dt']))
+
+		if 'last' in oldshift:
+			if 'next' in game['lines']['shifts']['line'][oldshift['last']]:
+				del(game['lines']['shifts']['line'][oldshift['last']]['next'])
+			game['lines'][team]['last']['line']=oldshift['last']
+		else:
+			game['lines'][team]['last']['line']=-1
+		sys.stdin.readline()
+
+		return game
+
+	if debug:
+		print("   Ending shift #"+str(oldshifti)+" for "+oldshift['key']+" at play "+str(playi)+" dt "+str(play['dt']))
+
+	for strplayi in range(oldshift['start'], oldshift['end']+1):
+		strplay=game['plays'][strplayi]
+		playstr=str(len(list(strplay[team]['onice'])))+'v'+str(len(list(strplay[otherteam]['onice'])))
+		if len(oldshift['segments']) > 0:
+			if oldshift['segments'][-1]['strength'] == playstr:
+				continue
+			oldsegment=oldshift['segments'][-1]
+			oldsegment['end']=strplayi-1
+			oldsegment['enddt']=strplay['dt']
+			oldsegment['toi']=int(oldsegment['enddt'])-int(oldsegment['startdt'])
+			oldshift['segments'][-1]=oldsegment
+
+		newsegment={}
+		newsegment['shift']=oldshifti
+		newsegment['strength']=playstr
+		newsegment['start']=strplayi
+		newsegment['startdt']=strplay['dt']
+		oldshift['segments'].append(newsegment)
+
+	if len(oldshift['segments']) > 0:
+		if 'end' not in oldshift['segments'][-1]:
+			strplay=game['plays'][oldshift['end']]
+			oldsegment=oldshift['segments'][-1]
+			oldsegment['end']=len(game['plays'])-1
+			oldsegment['enddt']=strplay['dt']
+			oldsegment['toi']=int(oldsegment['enddt'])-int(oldsegment['startdt'])
+			oldshift['segments'][-1]=oldsegment
+
+	if len(oldshift['segments']) > 1:
+		print("Shift "+str(oldshifti))
+		segmenti=0
+		while segmenti < len(oldshift['segments']):
+			segment=oldshift['segments'][segmenti]
+			print("   "+str(segmenti)+" "+str(segment['startdt'])+" - "+str(segment['enddt'])+" at "+segment['strength'])
+			segmenti=segmenti+1
+
+		print("   ---")
+		segmenti=0
+		while segmenti < len(oldshift['segments']):
+			segment=oldshift['segments'][segmenti]
+			print("   "+str(segmenti)+" "+str(segment['startdt'])+" - "+str(segment['enddt'])+" = "+str(segment['toi'])+" at "+segment['strength'])
+			if segmenti > 0:
+				lastsegment=oldshift['segments'][segmenti-1]
+				if segment['toi'] == 0 or segment['strength'] == lastsegment['strength']:
+					print("      Absorbing last "+str(segmenti-1)+" "+str(lastsegment['startdt'])+" - "+str(lastsegment['enddt'])+" = "+str(lastsegment['toi'])+" at "+lastsegment['strength'])
+					for k in ['end', 'enddt']:
+						lastsegment[k]=segment[k]
+					lastsegment['toi']=int(lastsegment['enddt'])-int(lastsegment['startdt'])
+					oldshift['segments'][segmenti-1]=lastsegment
+					oldshift['segments'].pop(segmenti)
+					continue
+
+			if segmenti < len(oldshift['segments'])-1:
+				nextsegment=oldshift['segments'][segmenti+1]
+				if segment['toi'] == 0 or segment['strength'] == nextsegment['strength']:
+					print("      Absorbing into next "+str(segmenti+1)+" "+str(nextsegment['startdt'])+" - "+str(nextsegment['enddt'])+" = "+str(nextsegment['toi'])+" at "+nextsegment['strength'])
+					for k in ['start', 'startdt']:
+						nextsegment[k]=segment[k]
+					segment['toi']=int(nextsegment['enddt'])-int(nextsegment['startdt'])
+					oldshift['segments'][segmenti+1]=nextsegment
+					oldshift['segments'].pop(segmenti)
+					continue
+
+			segmenti=segmenti+1
+
+		print("   ===")
+		segmenti=0
+		while segmenti < len(oldshift['segments']):
+			segment=oldshift['segments'][segmenti]
+			print("   "+str(segmenti)+" "+str(segment['startdt'])+" - "+str(segment['enddt'])+" at "+segment['strength'])
+			segmenti=segmenti+1
+
+	for part in ['fline', 'dline', 'goalie']:
+		key=game['lines'][team]['line'][oldshift['key']][part+'key']
+
+	game['lines']['shifts']['line'][oldshifti]=oldshift
 
 	return game
 
@@ -233,22 +290,616 @@ def make_positions(game, team, linekey, oldpositions={}):
 	game['lines'][team]['line'][linekey]['positions']=positions
 	return game
 
-def start_line(game, oldshifti, newshifti, playi, team, linekey):
+def start_line(game, playi):
 	debug=True
 
 	play=game['plays'][playi]
+	team=play['Team']
+	linera=sorted(list(play[team]['onice']))
+	linekey=','.join(linera)
+	if linekey not in game['lines'][team]['line']:
+		game=makelineinfo(game, team, linekey)
+	newshift={}
+	newshift['start']=playi
+	newshift['startdt']=play['dt']
+	newshift['team']=team
+	newshift['key']=linekey
+	newshift['segments']=[]
+	newshifti=len(game['lines']['shifts']['line'])
+
 	if debug:
 		print("   Starting shift #"+str(newshifti)+" for "+team+" "+linekey+" at play "+str(playi)+" dt "+str(play['dt']))
 
-	shift={}
-	shift['start']=playi
-	shift['startdt']=play['dt']
-	shift['team']=team
-	shift['key']=linekey
-	if oldshifti is not None:
-		shift['last']=oldshifti
-	game['lines'][team]['shifts']['line'].insert(newshifti, shift)
-	game['lines'][team]['line'][linekey]['shifts'].append(newshifti)
+
+	if game['lines'][team]['last']['line'] != -1:
+		oldshifti=game['lines'][team]['last']['line']
+		oldshift=game['lines']['shifts']['line'][oldshifti]
+		oldshift['next']=newshifti
+		game['lines']['shifts']['line'][oldshifti]=oldshift
+
+		newshift['last']=oldshifti
+
+	game['lines']['shifts']['line'].append(newshift)
+	game['lines'][team]['last']['line']=newshifti
+
+	game=create_part_lines(game, team, newshifti)
+	lineinfo=game['lines'][team]['line'][linekey]
+	for part in ['fline', 'dline', 'goalie']:
+		if 'last' in newshift:
+			oldshifti=newshift['last']
+			oldshift=game['lines']['shifts']['line'][oldshifti]
+			oldlineinfo=game['lines'][team]['line'][oldshift['key']]
+			if oldlineinfo[part+'key'] == lineinfo[part+'key']:
+				continue
+			game=end_part_line(game, team, part, oldshifti)
+
+		game=start_part_line(game, team, part, newshifti)
+
+	return game
+
+def start_part_line(game, team, part, lineshifti):
+	#game['lines']['shifts']['line'].append(newshift)
+	lineshift=game['lines']['shifts']['line'][lineshifti]
+	lineinfo=game['lines'][team]['line'][lineshift['key']]
+	partkey=lineinfo[part+'key']
+	partinfo=None
+	if partkey not in game['lines'][team][part]:
+		partinfo={}
+		partinfo['key']=partkey
+		partinfo['team']=team
+		partinfo['toi']=0
+		partinfo['str']=lineinfo[part+'str']
+		partinfo['id']=lineinfo[part+'id']
+		partinfo['shifts']=[]
+		partinfo['positions']={}
+		partinfo['final']={}
+		for pos in ['LW', 'C', 'RW', 'F', 'XF', 'XF2', 'XF3', 'XF4', 'XF5', 'XF6']:
+			partinfo['positions'][pos]=lineinfo['positions'][pos]
+			partinfo['final'][pos]=lineinfo['final'][pos]
+
+	else:
+		partinfo=game['lines'][team][part][partkey]
+
+	partshift={}
+	partshift['start']=lineshift['start']
+	partshift['startdt']=lineshift['startdt']
+	partshift['startline']=lineshifti
+	partshift['team']=team
+	partshift['key']=partkey
+	partshift['segments']=[]
+	partshift['type']=part
+	if game['lines'][team]['last'][part] != -1:
+		partshift['last']=game['lines'][team]['last'][part]
+		game['lines']['shifts'][part][partshift['last']]['next']=len(game['lines']['shifts'][part])
+	
+	game['lines'][team]['last'][part]=len(game['lines']['shifts'][part])
+	game['lines']['shifts'][part].append(partshift)
+	game['lines'][team][part][partkey]=partinfo
+	return game
+
+
+def end_part_line(game, team, part, lineshifti):
+	partshifti=game['lines'][team]['last'][part]
+	partshift=game['lines']['shifts'][part][partshifti]
+	partinfo=game['lines'][team][part][partshift['key']]
+
+	partshift['endline']=lineshifti
+	partshift['enddt']=game['lines']['shifts']['line'][lineshifti]['enddt']
+	partshift['toi']=int(partshift['enddt'])-int(partshift['startdt'])
+	partshift['end']=game['lines']['shifts']['line'][lineshifti]['end']
+
+	segmentlinei=partshift['startline']
+	while segmentlinei <= partshift['end']:
+		lineshift=game['lines']['shifts']['line'][segmentlinei]
+		for segment in lineshift['segments']:
+			partshift['segments'].append(segment)
+		if 'next' not in lineshift:
+			break
+		segmentlinei=lineshift['next']
+
+	game['lines']['shifts'][part][partshifti]=partshift
+	game['lines'][team][part][partshift['key']]=partinfo
+
+	return game
+
+def create_part_lines_from_scratch(game, team, key):
+	lineinfo=game['lines'][team]['line'][key]
+	if 'str' not in lineinfo:
+		newpos={}
+		surplus=[]
+
+		scratchpos=json.loads(json.dumps(lineinfo['positions']))
+
+		#Do we have faceoff intel on this line?  Use it!
+		if 'MakeC' in lineinfo:
+			for pos in scratchpos:
+				playeri=0
+				while playeri < len(scratchpos[pos]):
+					if scratchpos[pos][playeri] == lineinfo['MakeC']:
+						print("   "+str(scratchpos[k][i])+" ("+get_name(game, scratchpos[k][i])+") "+pos+" -> C from MakeC")
+						scratchpos[pos].pop(playeri)
+						continue
+					playeri=player+1
+			if 'C' not in scratchpos:
+				scratchpos['C']=[]
+			scratchpos['C'].insert(0, lineinfo['MakeC'])
+						
+		#Remove surplus position calls
+		for pos in ['LW', 'C', 'RW', 'LD', 'RD', 'G']:
+			if pos not in scratchpos or len(scratchpos[pos]) == 0:
+				continue
+			while len(scratchpos[pos]) > 1:
+				surplus.append(scratchpos[pos].pop())
+				print("   "+str(surplus[-1])+" ("+get_name(game, surplus[-1])+") is a surplus "+pos)
+				continue
+
+		#Assign single position calls
+		for pos in ['LW', 'C', 'RW', 'LD', 'RD', 'G']:
+			if pos not in scratchpos or len(scratchpos[pos]) == 0:
+				continue
+			newpos[pos]=scratchpos[pos][0]
+			print("   "+pos+" == "+str(newpos[pos])+" ("+get_name(game, newpos[pos])+")")
+
+		#Take a series of wild guesses where people are supposed to go
+		playeri=0
+		while playeri < len(surplus):
+			nhlid=surplus[playeri]
+			playerinfo=game['players'][nhlid]
+			usepos=None
+			posra=[]
+			if playerinfo['Position'] == 'LW' or playerinfo['Position'] == 'C' or playerinfo['Position'] == 'RW':
+				posra=[playerinfo['Hand']+'W']
+			elif playerinfo['Position'] == 'LD' or playerinfo['Position'] == 'RD':
+				posra=[playerinfo['Hand']+'D']
+
+			for pos in posra:
+				if pos not in newpos:
+					usepos=pos
+					break
+
+			if usepos is not None:
+				newpos[usepos]=surplus[playeri]
+				surplus.pop(playeri)
+				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position & hand")
+				continue
+
+			playeri=playeri+1
+
+		playeri=0
+		while playeri < len(surplus):
+			nhlid=surplus[playeri]
+			playerinfo=game['players'][nhlid]
+			usepos=None
+			posra=[]
+			if playerinfo['Position'] == 'LW' or playerinfo['Position'] == 'C' or playerinfo['Position'] == 'RW':
+				posra=['C', 'LW', 'RW']
+			elif playerinfo['Position'] == 'LD' or playerinfo['Position'] == 'RD':
+				posra=['LD', 'RD']
+
+			for pos in posra:
+				if pos not in newpos:
+					usepos=pos
+					break
+
+			if usepos is not None:
+				newpos[usepos]=surplus[playeri]
+				surplus.pop(playeri)
+				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position")
+				continue
+
+			playeri=playeri+1
+
+		playeri=0
+		while playeri < len(surplus):
+			nhlid=surplus[playeri]
+			playerinfo=game['players'][nhlid]
+			usepos=None
+			if playerinfo['Position'] == 'LW' or playerinfo['Position'] == 'C' or playerinfo['Position'] == 'RW':
+				posra=[playerinfo['Hand']+'D']
+			elif playerinfo['Position'] == 'LD' or playerinfo['Position'] == 'RD':
+				posra=[playerinfo['Hand']+'W']
+
+			for pos in posra:
+				if pos not in newpos:
+					usepos=pos
+					break
+
+			if usepos is not None:
+				newpos[usepos]=surplus[playeri]
+				surplus.pop(playeri)
+				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by hand")
+				continue
+
+			playeri=playeri+1
+
+
+		playeri=0
+		while playeri < len(surplus):
+			nhlid=surplus[playeri]
+			playerinfo=game['players'][nhlid]
+			usepos=None
+			if playerinfo['Position'] == 'LW' or playerinfo['Position'] == 'C' or playerinfo['Position'] == 'RW':
+				posra=['LD', 'RD']
+			elif playerinfo['Position'] == 'LD' or playerinfo['Position'] == 'RD':
+				posra=['LW', 'RW', 'C']
+
+			for pos in posra:
+				if pos not in newpos:
+					usepos=pos
+					break
+
+			if usepos is not None:
+				newpos[usepos]=surplus[playeri]
+				surplus.pop(playeri)
+				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position")
+				continue
+
+			playeri=playeri+1
+
+		playeri=0
+		while playeri < len(surplus):
+			if playerinfo['Position'] == 'LW' or playerinfo['Position'] == 'C' or playerinfo['Position'] == 'RW':
+				posra=['XF', 'XF2', 'XF3', 'XF4', 'XF5', 'XF6']
+			elif playerinfo['Position'] == 'LD' or playerinfo['Position'] == 'RD':
+				posra=['XD', 'XD2', 'XD3', 'XD4', 'XD5', 'XD6']
+			elif playerinfo['Position'] == 'G':
+				posra=['XG', 'XG2', 'XG3', 'XG4', 'XG5', 'XG6']
+
+			for pos in posra:
+				if pos not in newpos:
+					usepos=pos
+					break
+
+			if usepos is not None:
+				newpos[usepos]=surplus[playeri]
+				surplus.pop(playeri)
+				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by extra")
+				continue
+
+			playeri=playeri+1
+
+		lineinfo['final']=newpos
+		lineinfo['str']=[]
+		lineinfo['id']=[]
+		for pos in ['LW', 'C', 'RW', 'LD', 'RD', 'G']:
+			if pos not in newpos:
+				continue
+			lineinfo['str'].append(get_name(game, newpos[pos]))
+			lineinfo['id'].append(newpos[pos])
+		for pos in ['XF', 'XF2', 'XF3', 'XF4', 'XF5', 'XF6', 'XD', 'XD2', 'XD3', 'XD4', 'XD5', 'XD6', 'XG', 'XG2', 'XG3', 'XG4', 'XG5', 'XG6']:
+			if pos not in newpos:
+				continue
+			lineinfo['str'].append(get_name(game, newpos[pos]))
+			lineinfo['id'].append(newpos[pos])
+		lineinfo['key']=','.join(sorted(lineinfo['id']))
+		lineinfo['id']=','.join(lineinfo['id'])
+		lineinfo['str']=','.join(lineinfo['str'])
+
+		lineinfo['flinestr']=[]
+		lineinfo['flineid']=[]
+		for pos in ['LW', 'C', 'RW']:
+			if pos not in newpos:
+				lineinfo['flinestr'].append("")
+			else:
+				lineinfo['flinestr'].append(get_name(game, newpos[pos]))
+				lineinfo['flineid'].append(newpos[pos])
+		for pos in ['XF', 'XF2', 'XF3', 'XF4', 'XF5', 'XF6']:
+			if pos not in newpos:
+				continue
+			lineinfo['flinestr'].append(get_name(game, newpos[pos]))
+			lineinfo['flineid'].append(newpos[pos])
+		lineinfo['flinekey']=','.join(sorted(lineinfo['flineid']))
+		lineinfo['flineid']=','.join(lineinfo['flineid'])
+		lineinfo['flinestr']=','.join(lineinfo['flinestr'])
+
+		lineinfo['dlinestr']=[]
+		lineinfo['dlineid']=[]
+		for pos in ['LD', 'RD']:
+			if pos not in newpos:
+				continue
+			lineinfo['dlinestr'].append(get_name(game, newpos[pos]))
+			lineinfo['dlineid'].append(newpos[pos])
+		for pos in ['XD', 'XD2', 'XD3', 'XD4', 'XD5', 'XD6']:
+			if pos not in newpos:
+				continue
+			lineinfo['dlinestr'].append(get_name(game, newpos[pos]))
+			lineinfo['dlineid'].append(newpos[pos])
+		lineinfo['dlinekey']=','.join(sorted(lineinfo['dlineid']))
+		lineinfo['dlineid']=','.join(lineinfo['dlineid'])
+		lineinfo['dlinestr']=','.join(lineinfo['dlinestr'])
+
+		lineinfo['goaliestr']=[]
+		lineinfo['goalieid']=[]
+		for pos in ['G']:
+			if pos not in newpos:
+				continue
+			lineinfo['goaliestr'].append(get_name(game, newpos[pos]))
+			lineinfo['goalieid'].append(newpos[pos])
+		for pos in ['XG', 'XG2', 'XG3', 'XG4', 'XG5', 'XG6']:
+			if pos not in newpos:
+				continue
+			lineinfo['goaliestr'].append(get_name(game, newpos[pos]))
+			lineinfo['goalieid'].append(newpos[pos])
+		lineinfo['goaliekey']=','.join(sorted(lineinfo['goalieid']))
+		lineinfo['goalieid']=','.join(lineinfo['goalieid'])
+		lineinfo['goaliestr']=','.join(lineinfo['goaliestr'])
+		game['lines'][team]['line'][key]=lineinfo
+
+	for part in ['fline', 'dline', 'goalie']:
+		key=lineinfo[part+'key']
+
+		if key in game['lines'][team][part]:
+			continue
+
+		game['lines'][team][part][key]={}
+		game['lines'][team][part][key]['team']=team
+		game['lines'][team][part][key]['key']=key
+		game['lines'][team][part][key]['str']=lineinfo[part+'str']
+		game['lines'][team][part][key]['id']=lineinfo[part+'id']
+		game['lines'][team][part][key]['shifts']=[]
+		game['lines'][team][part][key]['toi']=0
+
+	return game
+
+def create_part_lines(game, team, newshifti):
+	shift=game['lines']['shifts']['line'][newshifti]
+	lineinfo=game['lines'][team]['line'][shift['key']]
+	play=game['plays'][shift['start']]
+	if 'str' not in lineinfo:
+		newpos={}
+		surplus=[]
+
+		scratchpos=json.loads(json.dumps(lineinfo['positions']))
+		#Put players from the last shift where they were before unless they're
+		#   the only ones filling that position.
+		if 'last' in shift:
+			oldshift=game['lines']['shifts']['line'][shift['last']]
+			oldlineinfo=game['lines'][team]['line'][oldshift['key']]
+			for pos in oldlineinfo['final']:
+				if oldlineinfo['final'][pos] not in play[team]['onice']:
+					continue
+				for k in scratchpos:
+					i=0
+					while i < len(scratchpos[k]):
+						if scratchpos[k][i] is not None and scratchpos[k][i] == oldlineinfo['final'][pos]:
+							if k != pos:
+								print("   "+str(scratchpos[k][i])+" ("+get_name(game, scratchpos[k][i])+") "+k+" -> "+pos+" from past")
+							scratchpos[k].pop(i)
+							continue
+						i=i+1
+				if pos not in scratchpos:
+					scratchpos[pos]=[]
+				scratchpos[pos].insert(0, oldlineinfo['final'][pos])
+
+		#Do we have faceoff intel on this line?  Use it!
+		if 'MakeC' in lineinfo:
+			for pos in scratchpos:
+				playeri=0
+				while playeri < len(scratchpos[pos]):
+					if scratchpos[pos][playeri] == lineinfo['MakeC']:
+						print("   "+str(scratchpos[k][i])+" ("+get_name(game, scratchpos[k][i])+") "+pos+" -> C from MakeC")
+						scratchpos[pos].pop(playeri)
+						continue
+					playeri=player+1
+			if 'C' not in scratchpos:
+				scratchpos['C']=[]
+			scratchpos['C'].insert(0, lineinfo['MakeC'])
+						
+		#Remove surplus position calls
+		for pos in ['LW', 'C', 'RW', 'LD', 'RD', 'G']:
+			if pos not in scratchpos or len(scratchpos[pos]) == 0:
+				continue
+			while len(scratchpos[pos]) > 1:
+				surplus.append(scratchpos[pos].pop())
+				print("   "+str(surplus[-1])+" ("+get_name(game, surplus[-1])+") is a surplus "+pos)
+				continue
+
+		#Assign single position calls
+		for pos in ['LW', 'C', 'RW', 'LD', 'RD', 'G']:
+			if pos not in scratchpos or len(scratchpos[pos]) == 0:
+				continue
+			newpos[pos]=scratchpos[pos][0]
+			print("   "+pos+" == "+str(newpos[pos])+" ("+get_name(game, newpos[pos])+")")
+
+		#Take a series of wild guesses where people are supposed to go
+		playeri=0
+		while playeri < len(surplus):
+			nhlid=surplus[playeri]
+			playerinfo=game['players'][nhlid]
+			usepos=None
+			posra=[]
+			if playerinfo['Position'] == 'LW' or playerinfo['Position'] == 'C' or playerinfo['Position'] == 'RW':
+				posra=[playerinfo['Hand']+'W']
+			elif playerinfo['Position'] == 'LD' or playerinfo['Position'] == 'RD':
+				posra=[playerinfo['Hand']+'D']
+
+			for pos in posra:
+				if pos not in newpos:
+					usepos=pos
+					break
+
+			if usepos is not None:
+				newpos[usepos]=surplus[playeri]
+				surplus.pop(playeri)
+				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position & hand")
+				continue
+
+			playeri=playeri+1
+
+		playeri=0
+		while playeri < len(surplus):
+			nhlid=surplus[playeri]
+			playerinfo=game['players'][nhlid]
+			usepos=None
+			posra=[]
+			if playerinfo['Position'] == 'LW' or playerinfo['Position'] == 'C' or playerinfo['Position'] == 'RW':
+				posra=['C', 'LW', 'RW']
+			elif playerinfo['Position'] == 'LD' or playerinfo['Position'] == 'RD':
+				posra=['LD', 'RD']
+
+			for pos in posra:
+				if pos not in newpos:
+					usepos=pos
+					break
+
+			if usepos is not None:
+				newpos[usepos]=surplus[playeri]
+				surplus.pop(playeri)
+				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position")
+				continue
+
+			playeri=playeri+1
+
+		playeri=0
+		while playeri < len(surplus):
+			nhlid=surplus[playeri]
+			playerinfo=game['players'][nhlid]
+			usepos=None
+			if playerinfo['Position'] == 'LW' or playerinfo['Position'] == 'C' or playerinfo['Position'] == 'RW':
+				posra=[playerinfo['Hand']+'D']
+			elif playerinfo['Position'] == 'LD' or playerinfo['Position'] == 'RD':
+				posra=[playerinfo['Hand']+'W']
+
+			for pos in posra:
+				if pos not in newpos:
+					usepos=pos
+					break
+
+			if usepos is not None:
+				newpos[usepos]=surplus[playeri]
+				surplus.pop(playeri)
+				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by hand")
+				continue
+
+			playeri=playeri+1
+
+
+		playeri=0
+		while playeri < len(surplus):
+			nhlid=surplus[playeri]
+			playerinfo=game['players'][nhlid]
+			usepos=None
+			if playerinfo['Position'] == 'LW' or playerinfo['Position'] == 'C' or playerinfo['Position'] == 'RW':
+				posra=['LD', 'RD']
+			elif playerinfo['Position'] == 'LD' or playerinfo['Position'] == 'RD':
+				posra=['LW', 'RW', 'C']
+
+			for pos in posra:
+				if pos not in newpos:
+					usepos=pos
+					break
+
+			if usepos is not None:
+				newpos[usepos]=surplus[playeri]
+				surplus.pop(playeri)
+				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position")
+				continue
+
+			playeri=playeri+1
+
+		playeri=0
+		while playeri < len(surplus):
+			if playerinfo['Position'] == 'LW' or playerinfo['Position'] == 'C' or playerinfo['Position'] == 'RW':
+				posra=['XF', 'XF2', 'XF3', 'XF4', 'XF5', 'XF6']
+			elif playerinfo['Position'] == 'LD' or playerinfo['Position'] == 'RD':
+				posra=['XD', 'XD2', 'XD3', 'XD4', 'XD5', 'XD6']
+			elif playerinfo['Position'] == 'G':
+				posra=['XG', 'XG2', 'XG3', 'XG4', 'XG5', 'XG6']
+
+			for pos in posra:
+				if pos not in newpos:
+					usepos=pos
+					break
+
+			if usepos is not None:
+				newpos[usepos]=surplus[playeri]
+				surplus.pop(playeri)
+				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by extra")
+				continue
+
+			playeri=playeri+1
+
+		lineinfo['final']=newpos
+		lineinfo['str']=[]
+		lineinfo['id']=[]
+		for pos in ['LW', 'C', 'RW', 'LD', 'RD', 'G']:
+			if pos not in newpos:
+				continue
+			lineinfo['str'].append(get_name(game, newpos[pos]))
+			lineinfo['id'].append(newpos[pos])
+		for pos in ['XF', 'XF2', 'XF3', 'XF4', 'XF5', 'XF6', 'XD', 'XD2', 'XD3', 'XD4', 'XD5', 'XD6', 'XG', 'XG2', 'XG3', 'XG4', 'XG5', 'XG6']:
+			if pos not in newpos:
+				continue
+			lineinfo['str'].append(get_name(game, newpos[pos]))
+			lineinfo['id'].append(newpos[pos])
+		lineinfo['key']=','.join(sorted(lineinfo['id']))
+		lineinfo['id']=','.join(lineinfo['id'])
+		lineinfo['str']=','.join(lineinfo['str'])
+
+		lineinfo['flinestr']=[]
+		lineinfo['flineid']=[]
+		for pos in ['LW', 'C', 'RW']:
+			if pos not in newpos:
+				lineinfo['flinestr'].append("")
+			else:
+				lineinfo['flinestr'].append(get_name(game, newpos[pos]))
+				lineinfo['flineid'].append(newpos[pos])
+		for pos in ['XF', 'XF2', 'XF3', 'XF4', 'XF5', 'XF6']:
+			if pos not in newpos:
+				continue
+			lineinfo['flinestr'].append(get_name(game, newpos[pos]))
+			lineinfo['flineid'].append(newpos[pos])
+		lineinfo['flinekey']=','.join(sorted(lineinfo['flineid']))
+		lineinfo['flineid']=','.join(lineinfo['flineid'])
+		lineinfo['flinestr']=','.join(lineinfo['flinestr'])
+
+		lineinfo['dlinestr']=[]
+		lineinfo['dlineid']=[]
+		for pos in ['LD', 'RD']:
+			if pos not in newpos:
+				continue
+			lineinfo['dlinestr'].append(get_name(game, newpos[pos]))
+			lineinfo['dlineid'].append(newpos[pos])
+		for pos in ['XD', 'XD2', 'XD3', 'XD4', 'XD5', 'XD6']:
+			if pos not in newpos:
+				continue
+			lineinfo['dlinestr'].append(get_name(game, newpos[pos]))
+			lineinfo['dlineid'].append(newpos[pos])
+		lineinfo['dlinekey']=','.join(sorted(lineinfo['dlineid']))
+		lineinfo['dlineid']=','.join(lineinfo['dlineid'])
+		lineinfo['dlinestr']=','.join(lineinfo['dlinestr'])
+
+		lineinfo['goaliestr']=[]
+		lineinfo['goalieid']=[]
+		for pos in ['G']:
+			if pos not in newpos:
+				continue
+			lineinfo['goaliestr'].append(get_name(game, newpos[pos]))
+			lineinfo['goalieid'].append(newpos[pos])
+		for pos in ['XG', 'XG2', 'XG3', 'XG4', 'XG5', 'XG6']:
+			if pos not in newpos:
+				continue
+			lineinfo['goaliestr'].append(get_name(game, newpos[pos]))
+			lineinfo['goalieid'].append(newpos[pos])
+		lineinfo['goaliekey']=','.join(sorted(lineinfo['goalieid']))
+		lineinfo['goalieid']=','.join(lineinfo['goalieid'])
+		lineinfo['goaliestr']=','.join(lineinfo['goaliestr'])
+		game['lines'][team]['line'][shift['key']]=lineinfo
+
+	for part in ['fline', 'dline', 'goalie']:
+		key=lineinfo[part+'key']
+
+		if key in game['lines'][team][part]:
+			continue
+
+		game['lines'][team][part][key]={}
+		game['lines'][team][part][key]['team']=team
+		game['lines'][team][part][key]['key']=key
+		game['lines'][team][part][key]['str']=lineinfo[part+'str']
+		game['lines'][team][part][key]['id']=lineinfo[part+'id']
+		game['lines'][team][part][key]['shifts']=[]
+		game['lines'][team][part][key]['toi']=0
+
 	return game
 
 def get_name(game, nhlid):
@@ -257,296 +908,31 @@ def get_name(game, nhlid):
 
 def get_line_str(game, linekey):
 	for team in game['lines']:
-		if linekey not in game['lines'][team]['line']:
-			continue
-		game=break_line(game, linekey)
-		return game['lines'][team]['line'][linekey]['linestr']
-	return ""
-
-def break_line(game, team, linekey):
-	print(team+" line "+linekey+" on faceoff")
-	lineinfo=game['lines'][team]['line'][linekey]
-	positions=lineinfo['positions']
-
-	if 'pretty' in lineinfo:
-		if 'MakeC' in lineinfo and len(lineinfo['positions']['C']) > 0 and lineinfo['positions']['C'][0] == lineinfo['MakeC']:
-			return game
-		del(lineinfo['pretty'])
-
-	if 'MakeC' in lineinfo:
-		if len(positions['C']) == 0:
-			for pos in positions:
-				if pos == 'C':
-					continue
-				for playeri in range(0, len(positions[pos])):
-					if positions[pos][playeri] == lineinfo['MakeC']:
-						positions[pos].pop(playeri)
-						positions['C'].insert(0, lineinfo['MakeC'])
-						print("   "+get_name(game, lineinfo['MakeC'])+" -> C by empty MakeC")
-						break
-
-		elif positions['C'][0] != lineinfo['MakeC']:
-			oldnhlid=positions['C'][0]
-			oldpos=game['players'][oldnhlid]['Position']
-			positions['C'].pop(0)
-			positions[oldpos].append(oldnhlid)
-
-			for pos in positions:
-				for playeri in range(0, len(positions[pos])):
-					if positions[pos][playeri] == lineinfo['MakeC']:
-						positions[pos].pop(playeri)
-						positions['C'].insert(0, lineinfo['MakeC'])
-						print("   "+get_name(game, lineinfo['MakeC'])+" -> C by MakeC")
-						break
-
-	deficit={}
-	surplus={}
-	for pos in positions:
-		if len(positions[pos]) == 1:
-			continue
-		elif len(positions[pos]) == 0:
-			deficit[pos]=0
-		else:
-			surplus[pos]=len(positions[pos])
-	
-	for have in list(surplus):
-		n=len(positions[have])
-		if n == 1:
-			continue
-
-		for playeri in range(len(positions[have])-1, -1, -1):
-			nhlid=positions[have][playeri]
-			player=game['players'][nhlid]
-			if 'Hand' not in player:
+		for part in ['line', 'fline', 'dline', 'goalie']:
+			if linekey not in game['lines'][team]['line']:
 				continue
-
-			if have == 'LD' or have == 'RD' or have == 'D':
-				if 'LD' in deficit and player['Hand'] == 'L':
-					print("   "+get_name(game, nhlid)+" -> LD by hand & D")
-					positions['LD'].append(nhlid)
-					positions[have].pop(playeri)
-					del(deficit['LD'])
-					n=n-1
-					break
-				elif 'RD' in deficit and player['Hand'] == 'R':
-					print("   "+get_name(game, nhlid)+" -> RD by hand & D")
-					positions['RD'].append(nhlid)
-					positions[have].pop(playeri)
-					del(deficit['RD'])
-					n=n-1
-					break
-			elif have != 'G':
-				if 'LW' in deficit and player['Hand'] == 'L':
-					print("   "+get_name(game, nhlid)+" -> LW by hand & F")
-					positions['LW'].append(nhlid)
-					positions[have].pop(playeri)
-					del(deficit['LW'])
-					n=n-1
-					break
-				elif 'RW' in deficit and player['Hand'] == 'R':
-					print("   "+get_name(game, nhlid)+" -> RW by hand & F")
-					positions['RW'].append(nhlid)
-					positions[have].pop(playeri)
-					del(deficit['RW'])
-					n=n-1
-					break
-
-	for have in list(surplus):
-		n=len(positions[have])
-		for playeri in range(len(positions[have])-1, -1, -1):
-			if n == 1:
-				break
-
-			nhlid=positions[have][playeri]
-			if have == 'LD' or have == 'RD' or have == 'D':
-				if 'LD' in deficit:
-					print("   "+get_name(game, nhlid)+" -> LD by D")
-					positions['LD'].append(nhlid)
-					positions[have].pop(playeri)
-					del(deficit['LD'])
-					n=n-1
-					break
-				elif 'RD' in deficit:
-					print("   "+get_name(game, nhlid)+" -> RD by D")
-					positions['RD'].append(nhlid)
-					positions[have].pop(playeri)
-					del(deficit['RD'])
-					n=n-1
-					break
-			elif have != 'G':
-				if 'LW' in deficit:
-					print("   "+get_name(game, nhlid)+" -> LW by F")
-					positions['LW'].append(nhlid)
-					positions[have].pop(playeri)
-					del(deficit['LW'])
-					n=n-1
-					break
-				elif 'RW' in deficit:
-					print("   "+get_name(game, nhlid)+" -> RW by F")
-					positions['RW'].append(nhlid)
-					positions[have].pop(playeri)
-					del(deficit['RW'])
-					n=n-1
-					break
-				elif 'C' in deficit:
-					print("   "+get_name(game, nhlid)+" -> C by F")
-					positions['C'].append(nhlid)
-					positions[have].pop(playeri)
-					del(deficit['C'])
-					n=n-1
-					break
-
-	for have in list(surplus):
-		n=len(positions[have])
-		if n == 1:
-			continue
-
-		for playeri in range(len(positions[have])-1, -1, -1):
-			nhlid=positions[have][playeri]
-			player=game['players'][nhlid]
-			if 'Hand' not in player:
-				continue
-
-			possible=[]
-			if player['Hand'] == 'L':
-				possible=['LW', 'LD']
-			elif player['Hand'] == 'R':
-				possible=['RW', 'RD']
-
-			for pos in possible:
-				if pos not in deficit:
-					continue
-				print("   "+get_name(game, nhlid)+" -> "+pos+" by Hand")
-				positions[pos].append(nhlid)
-				positions[have].pop(playeri)
-				del(deficit[pos])
-				n=n-1
-				break
-
-	for have in list(surplus):
-		n=len(positions[have])
-		if n <= 1:
-			continue
-
-		for playeri in range(len(positions[have])-1, -1, -1):
-			nhlid=positions[have][playeri]
-			player=game['players'][nhlid]
-
-			for pos in list(positions):
-				if pos not in deficit or len(positions) >= 1:
-					continue
-				print("   "+get_name(game, nhlid)+" -> "+pos+" by Need")
-				positions[pos].append(nhlid)
-				positions[have].pop(playeri)
-				del(deficit[pos])
-				n=n-1
-				break
-
-	lineinfo['balanced']=positions
-	
-	fline=[]
-	dline=[]
-	goal=[]
-	line=[]
-
-	n=-1
-	for pos in ['LW', 'C', 'RW']:
-		n=n+1
-		if len(positions[pos]) == 0:
-			continue
-		fline.insert(n, positions[pos][0])
-		line.insert(n, fline[-1])
-
-	n=-1
-	for pos in ['LD', 'RD']:
-		n=n+1
-		if len(positions[pos]) == 0:
-			continue
-		dline.insert(n, positions[pos][0])
-		line.insert(n+3, dline[-1])
-
-	n=-1
-	for pos in ['G']:
-		n=n+1
-		if len(positions[pos]) == 0:
-			continue
-		goal.insert(n, positions[pos][0])
-		line.insert(n+5, goal[-1])
-
-	for pos in positions:
-		for i in range(1, len(positions[pos])):
-			if pos == 'G':
-				goal.append(positions[pos][i])
-			elif pos == 'LD' or pos == 'RD':
-				dline.append(positions[pos][i])
-			else:
-				fline.append(positions[pos][i])
-			line.append(positions[pos][i])
-	
-	lineinfo['linestrid']=','.join(line)
-	lineinfo['flinestrid']=','.join(fline)
-	lineinfo['dlinestrid']=','.join(dline)
-	lineinfo['goaliestrid']=','.join(goal)
-
-	lineinfo['flinekey']=','.join(sorted(fline))
-	lineinfo['dlinekey']=','.join(sorted(dline))
-	lineinfo['goaliekey']=','.join(sorted(goal))
-
-	for i in range(0, len(fline)):
-		f=fline[i]
-		f=get_name(game, f)
-		f=re.sub('^[^#]*[#]', '#', f)
-		f=re.sub('[ ][^ ]*[ ]', ' ', f)
-		fline[i]=f
-	lineinfo['flinestr']=lineinfo['team']+' '+' '.join(fline)
-
-	for i in range(0, len(dline)):
-		d=dline[i]
-		d=get_name(game, d)
-		d=re.sub('^[^#]*[#]', '#', d)
-		d=re.sub('[ ][^ ]*[ ]', ' ', d)
-		dline[i]=d
-	lineinfo['dlinestr']=lineinfo['team']+' '+' '.join(dline)
-
-	for i in range(0, len(goal)):
-		g=goal[i]
-		g=get_name(game, g)
-		g=re.sub('^[^#]*[#]', '#', g)
-		g=re.sub('[ ][^ ]*[ ]', ' ', g)
-		goal[i]=g
-	lineinfo['goaliestr']=lineinfo['team']+' '+' '.join(goal)
-
-	for i in range(0, len(line)):
-		l=line[i]
-		l=get_name(game, l)
-		l=re.sub('^[^#]*[#]', '#', l)
-		l=re.sub('[ ][^ ]*[ ]', ' ', l)
-		line[i]=l
-	lineinfo['linestr']=lineinfo['team']+' '+' '.join(line)
-	lineinfo['pretty']=True
-
-	print("      L: "+lineinfo['linestr'])
-	print("         F: "+lineinfo['flinestr'])
-	print("         D: "+lineinfo['dlinestr'])
-	print("         G: "+lineinfo['goaliestr'])
-	game['lines'][team]['line'][linekey]=lineinfo
-
-	return game
-
+			return game['lines'][team][part][linekey]['str']
+	newstr=[]
+	for p in linekey.split(','):
+		newstr.append(get_name(game, p))
+	return ','.join(newstr)
 
 def add_lines(game):
 	debug=True
 	if 'lines' not in game:
 		game['lines']={}
+		game['lines']['shifts']={}
+		for part in ['line', 'fline', 'dline', 'goalie']:
+			game['lines']['shifts'][part]=[]
 		for teampos in game['teams']:
 			abv=game['teams'][teampos]['abv']
 			game['lines'][abv]={}
 			game['lines'][abv]['last']={}
 			game['lines'][abv]['shifts']={}
 			for part in ['line', 'fline', 'dline', 'goalie']:
+				game['lines'][abv]['shifts'][part]=[]
 				game['lines'][abv]['last'][part]=-1
 				game['lines'][abv][part]={}
-				game['lines'][abv]['shifts'][part]=[]
 
 	for playi in range(0, len(game['plays'])):
 		play=game['plays'][playi]
@@ -555,76 +941,9 @@ def add_lines(game):
 
 		if play['PLEvent'] == 'CHANGE':
 			team=play['Team']
-			linera=sorted(list(play[team]['onice']))
-			linekey=','.join(linera)
-			if linekey not in game['lines'][team]['line']:
-				game=makelineinfo(game, team, linekey)
-
-			oldshifti=None
-			if game['lines'][team]['last']['line'] != -1:
-				oldshifti=game['lines'][team]['last']['line']
-			newshifti=len(game['lines'][team]['shifts']['line'])
-			game=end_line(game, oldshifti, newshifti, playi, team)
-			game=start_line(game, oldshifti, newshifti, playi, team, linekey)
-			game['lines'][team]['last']['line']=newshifti
-
-			for part in ['fline', 'dline', 'goalie']:
-				newlineshift=game['lines'][team]['shifts']['line'][newshifti]
-				newlinekey=newlineshift['key']
-				newlineinfo=game['lines'][team]['line'][newlinekey]
-				if game['lines'][team]['last'][part] != -1:
-					oldlineshift=game['lines'][team]['shifts']['line'][oldshifti]
-					oldlinekey=oldlineshift['key']
-					oldlineinfo=game['lines'][team]['line'][oldlinekey]
-
-					if oldlineinfo[part+'key'] == newlineinfo[part+'key']:
-						continue
-
-					oldpartshifti=game['lines'][team]['last'][part]
-					oldpartshift=game['lines'][team]['shifts'][part][oldpartshifti]
-
-					oldpartshift['enddt']=play['dt']
-					oldpartshift['end']=playi
-					oldpartshift['toi']=oldpartshift['enddt']-oldpartshift['startdt']
-					game['lines'][team]['shifts'][part][oldpartshifti]=oldpartshift
-					startstr=oldpartshift['start']
-					while startstr < playi:
-						endstr=startstr+1
-						strength=game['plays'][startstr]['Strength']
-						while endstr < playi:
-							if game['plays'][endstr]['Strength'] != strength:
-								break
-							endstr=endstr+1
-						strshift={}
-						strshift['line']=oldshifti
-						strshift['key']=oldpartshift['key']
-						strshift['start']=startstr
-						strshift['startdt']=game['plays'][startstr]['dt']
-						strshift['end']=endstr
-						strshift['enddt']=game['plays'][endstr]['dt']
-						strshift['toi']=int(strshift['enddt'])-int(strshift['startdt'])
-						strshift['team']=team
-						strshift['linetype']=part
-						if strength not in game['lines'][team][part]:
-							game['lines'][team][part][strength]=[]
-						game['lines'][team][part][strength].append(strshift)
-
-						startstr=endstr
-
-					oldpartinfo=game['lines'][team][part][oldpartshift['key']]
-					oldpartinfo['toi']=oldpartinfo['toi']+oldpartshift['toi']
-					game['lines'][team][part][oldpartshift['key']]=oldpartinfo
-
-				newpartshift={}
-				newpartshift['team']=newlineinfo['team']
-				newpartshift['key']=newlineinfo[part+'key']
-				newpartshift['startdt']=play['dt']
-				newpartshift['start']=playi
-				newpartshift['toi']=0
-				newpartshifti=len(game['lines'][team]['shifts'][part])
-				game['lines'][team]['shifts'][part].insert(newpartshifti, newpartshift)
-				game['lines'][team]['last'][part]=newpartshifti
-				game['lines'][team][part][newpartshift['key']]['shifts'].append(newpartshifti)
+			linekey=sorted(list(play[team]['onice']))
+			game=end_line(game, playi)
+			game=start_line(game, playi)
 
 		elif play['PLEvent'] == 'FAC':
 			for teampos in game['teams']:
@@ -636,7 +955,7 @@ def add_lines(game):
 					continue
 
 				curshifti=game['lines'][abv]['last']['line']
-				curshift=game['lines'][abv]['shifts']['line'][curshifti]
+				curshift=game['lines']['shifts']['line'][curshifti]
 				lineinfo=game['lines'][abv]['line'][curshift['key']]
 				if 'faceoffs' not in lineinfo:
 					lineinfo['faceoffs']={}
@@ -702,16 +1021,22 @@ def add_lines(game):
 
 				if 'MakeC' not in lineinfo or lineinfo['MakeC'] != maxplayer:
 					game['lines'][abv]['line'][curshift['key']]['MakeC']=maxplayer
-					game=break_line(game, abv, curshift['key'])
+					game=create_part_lines_from_scratch(game, abv, curshift['key'])
 
-		for abv in game['lines']:
+		for teampos in game['teams']:
+			abv=game['teams'][teampos]['abv']
 			shifti=game['lines'][abv]['last']['line']
 			if shifti == -1:
 				game['plays'][playi][abv]['line']=""
 			else:
-				shift=game['lines'][abv]['shifts']['line'][shifti]
+				shift=game['lines']['shifts']['line'][shifti]
 				game['plays'][playi][abv]['line']=shift['key']
 
+	for teampos in game['teams']:
+		abv=game['teams'][teampos]['abv']
+		game=end_line(game, len(game['plays'])-1, abv)
+		for part in ['fline', 'dline', 'goalie']:
+			game=end_part_line(game, abv, part, game['lines'][abv]['last']['line'])
 
 	return game
 
