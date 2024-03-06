@@ -96,7 +96,7 @@ def read_game(season, season_type, gamenum):
 	return game
 
 def makelineinfo(game, team, linekey):
-	debug=True
+	debug=False
 	if debug:
 		print("   New line!  "+linekey)
 	lineinfo={}
@@ -111,7 +111,16 @@ def makelineinfo(game, team, linekey):
 	return game
 
 def end_line(game, playi, team=None):
-	debug=True
+	debug=False
+
+	if playi >= len(game['plays']):
+		playi=len(game['plays'])-1
+
+	if playi < 0:
+		f=open("/tmp/"+game['gamePk'], 'w')
+		f.write(json.dumps(game))
+		f.close()
+		return game
 
 	play = game['plays'][playi]
 
@@ -145,7 +154,7 @@ def end_line(game, playi, team=None):
 			game['lines'][team]['last']['line']=oldshift['last']
 		else:
 			game['lines'][team]['last']['line']=-1
-		sys.stdin.readline()
+#		sys.stdin.readline()
 
 		return game
 
@@ -181,22 +190,26 @@ def end_line(game, playi, team=None):
 			oldshift['segments'][-1]=oldsegment
 
 	if len(oldshift['segments']) > 1:
-		print("Shift "+str(oldshifti))
-		segmenti=0
-		while segmenti < len(oldshift['segments']):
-			segment=oldshift['segments'][segmenti]
-			print("   "+str(segmenti)+" "+str(segment['startdt'])+" - "+str(segment['enddt'])+" at "+segment['strength'])
-			segmenti=segmenti+1
+		if debug:
+			print("Shift "+str(oldshifti))
+			segmenti=0
+			while segmenti < len(oldshift['segments']):
+				segment=oldshift['segments'][segmenti]
+				print("   "+str(segmenti)+" "+str(segment['startdt'])+" - "+str(segment['enddt'])+" at "+segment['strength'])
+				segmenti=segmenti+1
 
-		print("   ---")
+			print("   ---")
+
 		segmenti=0
 		while segmenti < len(oldshift['segments']):
 			segment=oldshift['segments'][segmenti]
-			print("   "+str(segmenti)+" "+str(segment['startdt'])+" - "+str(segment['enddt'])+" = "+str(segment['toi'])+" at "+segment['strength'])
+			if debug:
+				print("   "+str(segmenti)+" "+str(segment['startdt'])+" - "+str(segment['enddt'])+" = "+str(segment['toi'])+" at "+segment['strength'])
 			if segmenti > 0:
 				lastsegment=oldshift['segments'][segmenti-1]
 				if segment['toi'] == 0 or segment['strength'] == lastsegment['strength']:
-					print("      Absorbing last "+str(segmenti-1)+" "+str(lastsegment['startdt'])+" - "+str(lastsegment['enddt'])+" = "+str(lastsegment['toi'])+" at "+lastsegment['strength'])
+					if debug:
+						print("      Absorbing last "+str(segmenti-1)+" "+str(lastsegment['startdt'])+" - "+str(lastsegment['enddt'])+" = "+str(lastsegment['toi'])+" at "+lastsegment['strength'])
 					for k in ['end', 'enddt']:
 						lastsegment[k]=segment[k]
 					lastsegment['toi']=int(lastsegment['enddt'])-int(lastsegment['startdt'])
@@ -207,7 +220,8 @@ def end_line(game, playi, team=None):
 			if segmenti < len(oldshift['segments'])-1:
 				nextsegment=oldshift['segments'][segmenti+1]
 				if segment['toi'] == 0 or segment['strength'] == nextsegment['strength']:
-					print("      Absorbing into next "+str(segmenti+1)+" "+str(nextsegment['startdt'])+" - "+str(nextsegment['enddt'])+" = "+str(nextsegment['toi'])+" at "+nextsegment['strength'])
+					if debug:
+						print("      Absorbing into next "+str(segmenti+1)+" "+str(nextsegment['startdt'])+" - "+str(nextsegment['enddt'])+" = "+str(nextsegment['toi'])+" at "+nextsegment['strength'])
 					for k in ['start', 'startdt']:
 						nextsegment[k]=segment[k]
 					segment['toi']=int(nextsegment['enddt'])-int(nextsegment['startdt'])
@@ -217,12 +231,13 @@ def end_line(game, playi, team=None):
 
 			segmenti=segmenti+1
 
-		print("   ===")
-		segmenti=0
-		while segmenti < len(oldshift['segments']):
-			segment=oldshift['segments'][segmenti]
-			print("   "+str(segmenti)+" "+str(segment['startdt'])+" - "+str(segment['enddt'])+" at "+segment['strength'])
-			segmenti=segmenti+1
+		if debug:
+			print("   ===")
+			segmenti=0
+			while segmenti < len(oldshift['segments']):
+				segment=oldshift['segments'][segmenti]
+				print("   "+str(segmenti)+" "+str(segment['startdt'])+" - "+str(segment['enddt'])+" at "+segment['strength'])
+				segmenti=segmenti+1
 
 	for part in ['fline', 'dline', 'goalie']:
 		key=game['lines'][team]['line'][oldshift['key']][part+'key']
@@ -291,7 +306,7 @@ def make_positions(game, team, linekey, oldpositions={}):
 	return game
 
 def start_line(game, playi):
-	debug=True
+	debug=False
 
 	play=game['plays'][playi]
 	team=play['Team']
@@ -380,6 +395,8 @@ def start_part_line(game, team, part, lineshifti):
 
 def end_part_line(game, team, part, lineshifti):
 	partshifti=game['lines'][team]['last'][part]
+	if partshifti == -1:
+		return game
 	partshift=game['lines']['shifts'][part][partshifti]
 	partinfo=game['lines'][team][part][partshift['key']]
 
@@ -403,6 +420,7 @@ def end_part_line(game, team, part, lineshifti):
 	return game
 
 def create_part_lines_from_scratch(game, team, key):
+	debug=False
 	lineinfo=game['lines'][team]['line'][key]
 	if 'str' not in lineinfo:
 		newpos={}
@@ -416,7 +434,8 @@ def create_part_lines_from_scratch(game, team, key):
 				playeri=0
 				while playeri < len(scratchpos[pos]):
 					if scratchpos[pos][playeri] == lineinfo['MakeC']:
-						print("   "+str(scratchpos[k][i])+" ("+get_name(game, scratchpos[k][i])+") "+pos+" -> C from MakeC")
+						if debug:
+							print("   "+str(scratchpos[k][i])+" ("+get_name(game, scratchpos[k][i])+") "+pos+" -> C from MakeC")
 						scratchpos[pos].pop(playeri)
 						continue
 					playeri=player+1
@@ -430,7 +449,8 @@ def create_part_lines_from_scratch(game, team, key):
 				continue
 			while len(scratchpos[pos]) > 1:
 				surplus.append(scratchpos[pos].pop())
-				print("   "+str(surplus[-1])+" ("+get_name(game, surplus[-1])+") is a surplus "+pos)
+				if debug:
+					print("   "+str(surplus[-1])+" ("+get_name(game, surplus[-1])+") is a surplus "+pos)
 				continue
 
 		#Assign single position calls
@@ -438,7 +458,8 @@ def create_part_lines_from_scratch(game, team, key):
 			if pos not in scratchpos or len(scratchpos[pos]) == 0:
 				continue
 			newpos[pos]=scratchpos[pos][0]
-			print("   "+pos+" == "+str(newpos[pos])+" ("+get_name(game, newpos[pos])+")")
+			if debug:
+				print("   "+pos+" == "+str(newpos[pos])+" ("+get_name(game, newpos[pos])+")")
 
 		#Take a series of wild guesses where people are supposed to go
 		playeri=0
@@ -460,7 +481,8 @@ def create_part_lines_from_scratch(game, team, key):
 			if usepos is not None:
 				newpos[usepos]=surplus[playeri]
 				surplus.pop(playeri)
-				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position & hand")
+				if debug:
+					print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position & hand")
 				continue
 
 			playeri=playeri+1
@@ -484,7 +506,8 @@ def create_part_lines_from_scratch(game, team, key):
 			if usepos is not None:
 				newpos[usepos]=surplus[playeri]
 				surplus.pop(playeri)
-				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position")
+				if debug:
+					print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position")
 				continue
 
 			playeri=playeri+1
@@ -507,7 +530,8 @@ def create_part_lines_from_scratch(game, team, key):
 			if usepos is not None:
 				newpos[usepos]=surplus[playeri]
 				surplus.pop(playeri)
-				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by hand")
+				if debug:
+					print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by hand")
 				continue
 
 			playeri=playeri+1
@@ -531,7 +555,8 @@ def create_part_lines_from_scratch(game, team, key):
 			if usepos is not None:
 				newpos[usepos]=surplus[playeri]
 				surplus.pop(playeri)
-				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position")
+				if debug:
+					print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position")
 				continue
 
 			playeri=playeri+1
@@ -553,7 +578,8 @@ def create_part_lines_from_scratch(game, team, key):
 			if usepos is not None:
 				newpos[usepos]=surplus[playeri]
 				surplus.pop(playeri)
-				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by extra")
+				if debug:
+					print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by extra")
 				continue
 
 			playeri=playeri+1
@@ -639,9 +665,14 @@ def create_part_lines_from_scratch(game, team, key):
 		game['lines'][team][part][key]['shifts']=[]
 		game['lines'][team][part][key]['toi']=0
 
+	if debug:
+		print("Created part lines from scratch")
+		sys.stdin.readline()
+
 	return game
 
 def create_part_lines(game, team, newshifti):
+	debug=False
 	shift=game['lines']['shifts']['line'][newshifti]
 	lineinfo=game['lines'][team]['line'][shift['key']]
 	play=game['plays'][shift['start']]
@@ -650,33 +681,34 @@ def create_part_lines(game, team, newshifti):
 		surplus=[]
 
 		scratchpos=json.loads(json.dumps(lineinfo['positions']))
+		#This is a losing idea this early in the process!
 		#Put players from the last shift where they were before unless they're
 		#   the only ones filling that position.
-		if 'last' in shift:
-			oldshift=game['lines']['shifts']['line'][shift['last']]
-			oldlineinfo=game['lines'][team]['line'][oldshift['key']]
-			for pos in oldlineinfo['final']:
-				if oldlineinfo['final'][pos] not in play[team]['onice']:
-					continue
-				for k in scratchpos:
-					i=0
-					while i < len(scratchpos[k]):
-						if scratchpos[k][i] is not None and scratchpos[k][i] == oldlineinfo['final'][pos]:
-							if k != pos:
-								print("   "+str(scratchpos[k][i])+" ("+get_name(game, scratchpos[k][i])+") "+k+" -> "+pos+" from past")
-							scratchpos[k].pop(i)
-							continue
-						i=i+1
-				if pos not in scratchpos:
-					scratchpos[pos]=[]
-				scratchpos[pos].insert(0, oldlineinfo['final'][pos])
+		#if 'last' in shift and False:
+		#	oldshift=game['lines']['shifts']['line'][shift['last']]
+		#	oldlineinfo=game['lines'][team]['line'][oldshift['key']]
+		#	for pos in oldlineinfo['final']:
+		#		if oldlineinfo['final'][pos] not in play[team]['onice']:
+		#			continue
+		#		for k in scratchpos:
+		#			i=0
+		#			while i < len(scratchpos[k]):
+		#				if scratchpos[k][i] is not None and scratchpos[k][i] == oldlineinfo['final'][pos]:
+		#					if k != pos and debug:
+		#						print("   "+str(scratchpos[k][i])+" ("+get_name(game, scratchpos[k][i])+") "+k+" -> "+pos+" from past")
+		#					scratchpos[k].pop(i)
+		#					continue
+		#				i=i+1
+		#		if pos not in scratchpos:
+		#			scratchpos[pos]=[]
+		#		scratchpos[pos].insert(0, oldlineinfo['final'][pos])
 
 		#Do we have faceoff intel on this line?  Use it!
 		if 'MakeC' in lineinfo:
 			for pos in scratchpos:
 				playeri=0
 				while playeri < len(scratchpos[pos]):
-					if scratchpos[pos][playeri] == lineinfo['MakeC']:
+					if scratchpos[pos][playeri] == lineinfo['MakeC'] and debug:
 						print("   "+str(scratchpos[k][i])+" ("+get_name(game, scratchpos[k][i])+") "+pos+" -> C from MakeC")
 						scratchpos[pos].pop(playeri)
 						continue
@@ -691,15 +723,32 @@ def create_part_lines(game, team, newshifti):
 				continue
 			while len(scratchpos[pos]) > 1:
 				surplus.append(scratchpos[pos].pop())
-				print("   "+str(surplus[-1])+" ("+get_name(game, surplus[-1])+") is a surplus "+pos)
+				if debug:
+					print("   "+str(surplus[-1])+" ("+get_name(game, surplus[-1])+") is a surplus "+pos)
 				continue
+
+		#Put players from the last shift where they were before if there's no
+		#   better option
+		if 'last' in shift and False:
+			oldshift=game['lines']['shifts']['line'][shift['last']]
+			oldlineinfo=game['lines'][team]['line'][oldshift['key']]
+			for surplusi in range(len(surplus)-1, -1, -1):
+				for pos in oldlineinfo['final']:
+					if len(scratchpos[pos]) > 0:
+						continue
+					if oldlineinfo['final'][pos] != surplus[surplusi]:
+						continue
+					print("   "+str(surplus[surplusi])+" ("+get_name(game, surplus[surplusi])+") "+pos+" from past")
+					scratchpos[pos].insert(0, surplus[surplusi])
+					surplus.pop(surplusi)
 
 		#Assign single position calls
 		for pos in ['LW', 'C', 'RW', 'LD', 'RD', 'G']:
 			if pos not in scratchpos or len(scratchpos[pos]) == 0:
 				continue
 			newpos[pos]=scratchpos[pos][0]
-			print("   "+pos+" == "+str(newpos[pos])+" ("+get_name(game, newpos[pos])+")")
+			if debug:
+				print("   "+pos+" == "+str(newpos[pos])+" ("+get_name(game, newpos[pos])+")")
 
 		#Take a series of wild guesses where people are supposed to go
 		playeri=0
@@ -721,7 +770,8 @@ def create_part_lines(game, team, newshifti):
 			if usepos is not None:
 				newpos[usepos]=surplus[playeri]
 				surplus.pop(playeri)
-				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position & hand")
+				if debug:
+					print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position & hand")
 				continue
 
 			playeri=playeri+1
@@ -745,7 +795,8 @@ def create_part_lines(game, team, newshifti):
 			if usepos is not None:
 				newpos[usepos]=surplus[playeri]
 				surplus.pop(playeri)
-				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position")
+				if debug:
+					print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position")
 				continue
 
 			playeri=playeri+1
@@ -768,7 +819,8 @@ def create_part_lines(game, team, newshifti):
 			if usepos is not None:
 				newpos[usepos]=surplus[playeri]
 				surplus.pop(playeri)
-				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by hand")
+				if debug:
+					print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by hand")
 				continue
 
 			playeri=playeri+1
@@ -792,7 +844,8 @@ def create_part_lines(game, team, newshifti):
 			if usepos is not None:
 				newpos[usepos]=surplus[playeri]
 				surplus.pop(playeri)
-				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position")
+				if debug:
+					print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by position")
 				continue
 
 			playeri=playeri+1
@@ -814,7 +867,8 @@ def create_part_lines(game, team, newshifti):
 			if usepos is not None:
 				newpos[usepos]=surplus[playeri]
 				surplus.pop(playeri)
-				print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by extra")
+				if debug:
+					print("   "+usepos+" == "+str(newpos[usepos])+" ("+get_name(game, newpos[usepos])+") by extra")
 				continue
 
 			playeri=playeri+1
@@ -900,6 +954,10 @@ def create_part_lines(game, team, newshifti):
 		game['lines'][team][part][key]['shifts']=[]
 		game['lines'][team][part][key]['toi']=0
 
+	if debug:
+		print("Done with creating parts")
+		sys.stdin.readline()
+
 	return game
 
 def get_name(game, nhlid):
@@ -918,7 +976,7 @@ def get_line_str(game, linekey):
 	return ','.join(newstr)
 
 def add_lines(game):
-	debug=True
+	debug=False
 	if 'lines' not in game:
 		game['lines']={}
 		game['lines']['shifts']={}
