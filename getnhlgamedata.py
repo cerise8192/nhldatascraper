@@ -2153,7 +2153,7 @@ def collate(data):
 
 	collated['notes']=[]
 	for note in data['PLNOTE']:
-		if re.search('^[ ]*[^,]+[,][ ]+\S+[ ]+[0-9]+,[ ]+[0-9]+[ ]*$', note['Description']):
+		if re.search('^[ ]*[^,]+[,][ ]+[^ ]+[ ]+[0-9]+,[ ]+[0-9]+[ ]*$', note['Description']):
 			note['Event']="DATE"
 		elif re.search('^[ ]*Attendance[ ]+.*', note['Description']):
 			note['Event']="ATND"
@@ -2366,7 +2366,7 @@ def fixgames(data):
 		for i in range(0, len(data['PL'])):
 			event=data['PL'][i]
 			fixteams=['T.B', 'N.J', 'L.A', 'S.J']
-			fixteamsre=['T\.B', 'N\.J', 'L\.A', 'S\.J']
+			fixteamsre=['T[.]B', 'N[.]J', 'L[.]A', 'S[.]J']
 			fixed=['TBL', 'NJD', 'LAK', 'SJS']
 			for teami in range(0, len(fixteams)):
 				print("Looking for "+fixteams[teami]+" On Ice")
@@ -2692,7 +2692,7 @@ def parsedesc(format, desc, play, player_lookup):
 				if debug:
 					print("   Trimming to "+block)
 				blockdesc=desc
-				if re.search('\S', block):
+				if re.search('[^ ]', block):
 					blockdesc=re.sub(re.escape(block)+'.*$', '', desc)
 					if debug:
 						print("   Searching in "+blockdesc)
@@ -3009,9 +3009,9 @@ def parse_pl(data, collated):
 				elif re.search('[#][0-9]+[ ]+[^(]+[(][0-9]+[)]', parsera[i]):
 					change=True
 					parsera[i]=re.sub('[#][0-9]+[ ]+[^(]+[(][0-9]+[)]', '{{Shooter|player}}({{ngoals|number}})', parsera[i])
-				elif re.search('[#][0-9]+[ ]+.*\S', parsera[i]):
+				elif re.search('[#][0-9]+[ ]+.*[^ ]', parsera[i]):
 					change=True
-					parsera[i]=re.sub('[#][0-9]+[ ]+.*\S', '{{Shooter|player}}', parsera[i])
+					parsera[i]=re.sub('[#][0-9]+[ ]+.*[^ ]', '{{Shooter|player}}', parsera[i])
 
 				zone=zone_type(parsera[i])
 				if zone is not None:
