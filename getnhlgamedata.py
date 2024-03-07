@@ -16,7 +16,7 @@ from websockets.sync.client import connect
 def penalty_type(text):
 	types=['Abuse of officials', 'Abusive language', 'Aggressor', 'Bench', 'Boarding', 'Broken stick', 'Butt ending', 'Charging', 'Clipping', 'Closing hand on puck', 'Covering puck in crease', 'Cross checking', 'Cross-checking', 'Delay Game', 'Delay Game - Bench - FO Viol', 'Delay Game - Bench - FO viol', 'Delay Game - Equipment', 'Delay Game - FO Viol - hand', 'Delay Game - Goalie - restrict', 'Delay Game - Puck over glass', 'Delay Game - Smothering puck', 'Delay Game - Unsucc chlg', 'Delay Game - Unsucc chlg', 'Elbowing', 'Embellishment', 'Fighting', 'Game Misconduct', 'Game Misconduct - Head coach', 'Goalkeeper displaced net', 'Goalie leave crease', 'Hi stick', 'Hi-sticking', 'High-sticking', 'Holding', 'Holding stick', 'Holding the stick', 'Hooking', 'Illegal check to head', 'Illegal stick', 'Instigator', 'Interference', 'Interference on goalkeeper', 'Kneeing', 'Match [Pp]enalty', 'Minor', 'Misconduct', "Playing without a helmet", "Puck thrown fwd - Goalkeeper", "Removing opponent's helmet", 'Roughing', 'Roughing - Removing opp helmet', 'Slash', 'Slashing', 'Spearing', 'Throwing equipment', 'Throwing stick', 'Throw object at puck', 'Too many men/ice', 'Tripping', 'Unsportsmanlike conduct']
 	for penaltytype in types:
-		penalty_match=re.search('\s*'+penaltytype+'\s*', text)
+		penalty_match=re.search('[ ]*'+penaltytype+'[ ]*', text)
 		if penalty_match is not None:
 			start=penalty_match.start()
 			end=penalty_match.end()
@@ -40,21 +40,21 @@ def penalty_type(text):
 def shot_type(text):
 	types=['Backhand', 'Bat', 'Between Legs', 'Cradle', 'Deflected', 'Failed Attempt', 'Poke', 'Slap', 'Snap', 'Tip-In', 'Wrap-around', 'Wrist']
 	for shottype in types:
-		if re.search('\s*'+shottype+'\s*', text):
+		if re.search('[ ]*'+shottype+'[ ]*', text):
 			return shottype
 	return None
 
 def miss_type(text):
 	types=[ 'Above Crossbar', 'Goalpost', 'High and Wide Left', 'High and Wide Right', 'Hit Crossbar', 'Hit Left Post', 'Hit Right Post', 'Over Net', 'Short', 'Wide Left', 'Wide of Net', 'Wide Right']
 	for misstype in types:
-		if re.search('\s*'+misstype+'\s*', text):
+		if re.search('[ ]*'+misstype+'[ ]*', text):
 			return misstype
 	return None
 
 def zone_type(text):
 	types=['Off. Zone', 'Neu. Zone', 'Def. Zone']
 	for zonetype in types:
-		if re.search('\s*'+zonetype+'\s*', text):
+		if re.search('[ ]*'+zonetype+'[ ]*', text):
 			return zonetype
 	return None
 
@@ -122,8 +122,8 @@ def get_name_combos(startname):
 	newnames=[]
 	
 	for name in names:
-		ra=re.split('[-\s]', name)
-		matches=re.findall('[-\s]', name)
+		ra=re.split('[-[ ]]', name)
+		matches=re.findall('[-[ ]]', name)
 
 		for i in range(1, 2**(len(ra))):
 			n=[]
@@ -221,10 +221,13 @@ def debug(dict, indent=0, path=''):
 		debug_str(str(dict), indent, path)
 	else:
 		print("Unknown type: "+str(type(dict)))
+
+def get_text_alone(tag):
+	return tag.text
 	
 def get_string(tag):
 	str=get_string_recurse(tag)
-	if re.search('^\s*$', str) is not None:
+	if re.search('^[ ]*$', str) is not None:
 		str=get_alt_string(tag)
 
 #	if tag is not None and re.search('Time', str):
@@ -601,14 +604,14 @@ def get_toi(soup):
 
 			#This can be a player's name & number			
 			player=get_string(tds[0])
-			if re.search('^\s*[0-9]+\s+[^,]+[,]\s+.*', player):
-				num=re.sub('^\s+', '', player)
-				num=re.sub('\s+.*', '', num)
+			if re.search('^[ ]*[0-9]+[ ]+[^,]+[,][ ]+.*', player):
+				num=re.sub('^[ ]+', '', player)
+				num=re.sub('[ ]+.*', '', num)
 
-				last=re.sub('^\s*[0-9]+\s+', '', player)
+				last=re.sub('^[ ]*[0-9]+[ ]+', '', player)
 				last=re.sub('[,].*$', '', last)
 
-				first=re.sub('^.*[,]\s*', '', player)
+				first=re.sub('^.*[,][ ]*', '', player)
 
 				player=num+' '+first+' '+last
 				if player not in toi:
@@ -627,8 +630,8 @@ def get_toi(soup):
 			vals=[]
 			for td in tds:
 				string=get_string(td)
-				string=re.sub('^\s*', '', string)
-				string=re.sub('\s*$', '', string)
+				string=re.sub('^[ ]*', '', string)
+				string=re.sub('[ ]*$', '', string)
 				vals.append(string)
 
 			if len(cols) == 0:
@@ -648,17 +651,17 @@ def get_toi(soup):
 					if debug:
 						print('   '+cols[i]+' = '+vals[i])
 					shift[cols[i]]=vals[i]
-				if re.match('^\s*[0-9:]+\s*[/]\s*[0-9:]+\s*$', shift['Start of Shift']):
-					shift['StartEL']=re.sub('\s*[/].*$', '', shift['Start of Shift'])
+				if re.match('^[ ]*[0-9:]+[ ]*[/][ ]*[0-9:]+[ ]*$', shift['Start of Shift']):
+					shift['StartEL']=re.sub('[ ]*[/].*$', '', shift['Start of Shift'])
 					shift['StartEL']=re.sub('^[0]+([0-9]+)', '\\1', shift['StartEL'])
 
-					shift['StartREM']=re.sub('^.*[/]\s*', '', shift['Start of Shift'])
+					shift['StartREM']=re.sub('^.*[/][ ]*', '', shift['Start of Shift'])
 					shift['StartREM']=re.sub('^[0]+([0-9]+)', '\\1', shift['StartREM'])
-				if re.match('^\s*[0-9:]+\s*[/]\s*[0-9:]+\s*$', shift['End of Shift']):
-					shift['EndEL']=re.sub('\s*[/].*$', '', shift['End of Shift'])
+				if re.match('^[ ]*[0-9:]+[ ]*[/][ ]*[0-9:]+[ ]*$', shift['End of Shift']):
+					shift['EndEL']=re.sub('[ ]*[/].*$', '', shift['End of Shift'])
 					shift['EndEL']=re.sub('^[0]+([0-9]+)', '\\1', shift['EndEL'])
 
-					shift['EndREM']=re.sub('^.*[/]\s*', '', shift['End of Shift'])
+					shift['EndREM']=re.sub('^.*[/][ ]*', '', shift['End of Shift'])
 					shift['EndREM']=re.sub('^[0]+([0-9]+)', '\\1', shift['EndREM'])
 				if shift['Per'] == 'OT':
 					shift['Per']=4
@@ -672,6 +675,14 @@ def get_toi(soup):
 	return toi
 
 def get_pl(game):
+	pl=get_pl_2019(game)
+#	if len(pl) == 0:
+#		pl=get_pl_2018(game)
+
+	return pl
+
+
+def get_pl_2018(game):
 	debug_pl=False
 	url='http://www.nhl.com/scores/htmlreports/'+str(game['season'])+'/PL'+game['html']['t']+game['html']['n']+'.HTM'
 	if (debug_pl):
@@ -685,7 +696,15 @@ def get_pl(game):
 	root=nav_tag(soup, [0, 5])
 	#soup = document, 0 = html, 5 = body
 
-	gameinfo=nav_tag(soup, [0, 5, 3, 1, 1, 1, 1, 1, 3, 1])
+	gameinfo=nav_tag(soup, [0, 5, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+	debug_html(gameinfo)
+	print('---')
+	for tag in tag_search(gameinfo, ['table', 'tr', 'td']):
+		print(get_string(tag))
+	exit(5)
+
+
+	gameinfo=nav_tag(soup, [0, 5, 3, 1, 1, 1, 1, 1])
 	for td in tag_search(gameinfo, ['tr', 'td']):
 		text=get_string(td)
 		event={}
@@ -723,13 +742,97 @@ def get_pl(game):
 				for i in range(0, len(cols)):
 					td=tds[i]
 
-					if re.search('\s+On\s+Ice\s*$', cols[i]):
-						team=re.sub('\s+On\s+Ice\s*$', '', cols[i])
+					if re.search('[ ]+On[ ]+Ice[ ]*$', cols[i]):
+						team=re.sub('[ ]+On[ ]+Ice[ ]*$', '', cols[i])
 						line=[]
 						for playertag in tag_search(td, ['table', 'tr', 'td', 'table', 'tr', 'td', 'font']):
 							number=get_string(playertag)
-							position=re.sub('\s*[-]\s*.*$', '', playertag.attrs['title'])
-							player=re.sub('^.*\s*[-]\s*', '', playertag.attrs['title'])
+							position=re.sub('[ ]*[-][ ]*.*$', '', playertag.attrs['title'])
+							player=re.sub('^.*[ ]*[-][ ]*', '', playertag.attrs['title'])
+							line.append(team+' #'+number+' '+player)
+							if (debug_pl):
+								print("   Player: "+str(len(line))+" = "+line[-1])
+						event[cols[i]]=','.join(line)
+					elif re.search('Time:ElapsedGame', cols[i]):
+						event[cols[i]]=get_string(td)
+						timesplit=event[cols[i]].split(':')
+						event['Elapsed']=timesplit[0]+':'+timesplit[1][0:2]
+						event['Remaining']=timesplit[1][2:]+':'+timesplit[2]
+						if (debug_pl):
+							print("   Elapsed="+event['Elapsed'])
+							print("   Remaining="+event['Remaining'])
+					else:
+						event[cols[i]]=get_string(td)
+
+					if (debug_pl):
+						print("   "+str(i)+" -> "+cols[i]+" = "+event[cols[i]])
+
+				if (debug_pl):
+					debug(event)
+
+				pl.append(event)
+	return pl
+
+def get_pl_2019(game):
+	debug_pl=False
+	url='http://www.nhl.com/scores/htmlreports/'+str(game['season'])+'/PL'+game['html']['t']+game['html']['n']+'.HTM'
+	if (debug_pl):
+		print(url)
+	text=wget(url)
+	if text is None:
+		return None
+	soup = BeautifulSoup(text, 'html.parser')
+	pl=[]
+
+	root=nav_tag(soup, [0, 5])
+	#soup = document, 0 = html, 5 = body
+
+
+	gameinfo=nav_tag(soup, [0, 5, 3, 1, 1, 1, 1, 1])
+	for td in tag_search(gameinfo, ['tr', 'td']):
+		text=get_string(td)
+		event={}
+		event['Event']='NOTE'
+		event['Description']=text
+		event['Per']="1"
+		event['Elapsed']="0:00"
+		event['Remaining']="20:00"
+		event['#']="0"
+		pl.append(event)
+
+	cols=[]
+	for table in tag_search(root, ['div', 'table']):
+		for tr in tag_search(table, ['tr']):
+			if debug_pl:
+				debug_html(tr)
+			tds=tag_search(tr, ['td'])
+
+			if len(tds) == 1:
+				cols=[]
+				continue
+
+			if len(cols) == 0:
+				vals=[]
+				for td in tds:
+					vals.append(get_string(td))
+					if vals[-1] == '':
+						vals[-1]='Time'
+
+				cols=vals
+				if (debug_pl):
+					print(",".join(cols))
+			else:
+				event={}
+				for i in range(0, len(cols)):
+					td=tds[i]
+
+					if re.search('[ ]+On[ ]+Ice[ ]*$', cols[i]):
+						team=re.sub('[ ]+On[ ]+Ice[ ]*$', '', cols[i])
+						line=[]
+						for playertag in tag_search(td, ['table', 'tr', 'td', 'table', 'tr', 'td', 'font']):
+							number=get_string(playertag)
+							position=re.sub('[ ]*[-][ ]*.*$', '', playertag.attrs['title'])
+							player=re.sub('^.*[ ]*[-][ ]*', '', playertag.attrs['title'])
 							line.append(team+' #'+number+' '+player)
 							if (debug_pl):
 								print("   Player: "+str(len(line))+" = "+line[-1])
@@ -827,11 +930,11 @@ def get_ro(game):
 					for i in range(0, len(labels)):
 						player[labels[i]]=cols[i]
 					if 'Name' in player:
-						if re.search('\s+[(][CA][)]\s*$', player['Name']):
+						if re.search('[ ]+[(][CA][)][ ]*$', player['Name']):
 							captain=re.sub('^.*[(]', '', player['Name'])
 							captain=re.sub('[)].*$', '', captain)
 
-							player['Name']=re.sub('\s+[(][^)]*[)]\s*$', '', player['Name'])
+							player['Name']=re.sub('[ ]+[(][^)]*[)][ ]*$', '', player['Name'])
 							player['Captain']=captain
 
 						if 'class' in col.attrs:
@@ -887,7 +990,7 @@ def get_ro(game):
 			coach={}
 			names=get_string(td).split('\n')
 			coach['Name']=names[0]
-			if re.search('#\s*[0-9]+\s+', coach['Name']):
+			if re.search('#[ ]*[0-9]+[ ]+', coach['Name']):
 				return None
 			coach['Pos']='Head Coach'
 			coach['Team']=teams[len(coaches)]
@@ -952,17 +1055,17 @@ def get_ro(game):
 	title=''
 	#2022/02/0714 - standby referee
 	for l in refs:
-		if re.search('^\s*Referee\s*$', l):
+		if re.search('^[ ]*Referee[ ]*$', l):
 			title='REFEREE'
-		elif re.search('^\s*Arbitre/Referee\s*$', l):
+		elif re.search('^[ ]*Arbitre/Referee[ ]*$', l):
 			title='REFEREE'
-		elif re.search('^\s*Linesman\s*$', l):
+		elif re.search('^[ ]*Linesman[ ]*$', l):
 			title='LINESMAN'
-		elif re.search('^\s*JL/Linesman\s*$', l):
+		elif re.search('^[ ]*JL/Linesman[ ]*$', l):
 			title='LINESMAN'
-		elif re.search('^\s*Linesperson\s*$', l):
+		elif re.search('^[ ]*Linesperson[ ]*$', l):
 			title='LINESMAN'
-		elif re.search('^\s*Standby\s*$', l):
+		elif re.search('^[ ]*Standby[ ]*$', l):
 			if title == 'REFEREE':
 				title='STANDBY_REF'
 			elif title == 'LINESMAN':
@@ -970,22 +1073,22 @@ def get_ro(game):
 			else:
 				print("Unknown standby ref type!")
 				return None
-		elif re.search('^\s*[#][0-9]+\s+', l):
+		elif re.search('^[ ]*[#][0-9]+[ ]+', l):
 			if title == '':
 				print("No title found for refs!")
 				return None
 
-			num=re.sub('^\s*[#]', '', l)
-			num=re.sub('\s+.*$', '', num)
+			num=re.sub('^[ ]*[#]', '', l)
+			num=re.sub('[ ]+.*$', '', num)
 
-			name=re.sub('^\s*[#][0-9]+\s+', '', l)
+			name=re.sub('^[ ]*[#][0-9]+[ ]+', '', l)
 
 			official={}
 			official['Name']=name
 			official['#']=num
 			official['Pos']=title
 			officials.append(official)
-		elif not re.search('^\s*$', l):
+		elif not re.search('^[ ]*$', l):
 			print("Unknown line: "+l)
 			return None
 
@@ -1190,7 +1293,7 @@ def search_nhlid(searchstr):
 	debug=False
 	if debug:
 		print("Search NHL: "+searchstr)
-	searchstr=re.sub('^\s*[.A-Z][.A-Z][.A-Z]\s+[#]?\s*[0-9]+\s+', '', searchstr)
+	searchstr=re.sub('^[ ]*[.A-Z][.A-Z][.A-Z][ ]+[#]?[ ]*[0-9]+[ ]+', '', searchstr)
 	searchstr=unidecode(searchstr).upper()
 	url="https://search.d3.nhle.com/api/v1/search/player?culture=en-us&q="+searchstr
 	session=requests.Session()
@@ -1203,7 +1306,7 @@ def search_nhlid(searchstr):
 		id = result['playerId']
 		name = unidecode(result['name']).upper()
 		match=0
-		for s in re.split('\s+', searchstr):
+		for s in re.split('[ ]+', searchstr):
 			if re.search("(?i)"+s, name):
 				print("   Found: "+s+" in "+name)
 				match=match+1
@@ -1594,14 +1697,14 @@ def get_players_ro(data, collated):
 				else:
 					player['Scratched']=False
 
-				if re.search('\s*[(][C][)]\s*$', player['Name']):
+				if re.search('[ ]*[(][C][)][ ]*$', player['Name']):
 					if not player['Scratched']:
 						player['Captain']='C'
-					player['Name'] = re.sub('\s*[(][^)]*[)]\s*$', '', player['Name'])
-				elif re.search('\s*[(][A][)]\s*$', player['Name']):
+					player['Name'] = re.sub('[ ]*[(][^)]*[)][ ]*$', '', player['Name'])
+				elif re.search('[ ]*[(][A][)][ ]*$', player['Name']):
 					if not player['Scratched']:
 						player['Alternate']='A'
-					player['Name'] = re.sub('\s*[(][^)]*[)]\s*$', '', player['Name'])
+					player['Name'] = re.sub('[ ]*[(][^)]*[)][ ]*$', '', player['Name'])
 
 				key=player['Team']+' #'+player['#']+' '+player['Name']
 				player['key']=key
@@ -1933,7 +2036,6 @@ def get_shifts_pxp(data, collated):
 		return collated
 	
 	for shift in data['PXP']['shifts']['data']:
-		#print(json.dumps(shift, indent=3))
 		key = shift['playerId']
 		if key is None:
 			continue
@@ -1963,9 +2065,9 @@ def get_shifts_pxp(data, collated):
 
 def get_shifts_thv(data, collated):
 	for player in data['TH']:
-		player=re.sub('^\s*', '', player)
-		num=re.sub('\s+.*$', '', player)
-		name=re.sub('^[0-9]+\s+', '', player)
+		player=re.sub('^[ ]*', '', player)
+		num=re.sub('[ ]+.*$', '', player)
+		name=re.sub('^[0-9]+[ ]+', '', player)
 		lookup=collated['teams']['home']['abv']+' #'+num+' '+name
 
 		for n in get_name_combos(lookup):
@@ -1976,9 +2078,9 @@ def get_shifts_thv(data, collated):
 
 
 	for player in data['TV']:
-		player=re.sub('^\s*', '', player)
-		num=re.sub('\s+.*$', '', player)
-		name=re.sub('^[0-9]+\s+', '', player)
+		player=re.sub('^[ ]*', '', player)
+		num=re.sub('[ ]+.*$', '', player)
+		name=re.sub('^[0-9]+[ ]+', '', player)
 		lookup=collated['teams']['away']['abv']+' #'+num+' '+name
 
 		for n in get_name_combos(lookup):
@@ -2051,15 +2153,15 @@ def collate(data):
 
 	collated['notes']=[]
 	for note in data['PLNOTE']:
-		if re.search('^\s*[^,]+[,]\s+\S+\s+[0-9]+,\s+[0-9]+\s*$', note['Description']):
+		if re.search('^[ ]*[^,]+[,][ ]+\S+[ ]+[0-9]+,[ ]+[0-9]+[ ]*$', note['Description']):
 			note['Event']="DATE"
-		elif re.search('^\s*Attendance\s+.*', note['Description']):
+		elif re.search('^[ ]*Attendance[ ]+.*', note['Description']):
 			note['Event']="ATND"
-		elif re.search('^\s*Start\s+', note['Description']):
+		elif re.search('^[ ]*Start[ ]+', note['Description']):
 			note['Event']="TIME"
-		elif re.search('^\s*Game\s+[0-9]+\s*$', note['Description']):
+		elif re.search('^[ ]*Game[ ]+[0-9]+[ ]*$', note['Description']):
 			note['Event']="GAME"
-		elif re.search('^\s*Final\s*$', note['Description']):
+		elif re.search('^[ ]*Final[ ]*$', note['Description']):
 			note['Event']="FINAL"
 		collated['notes'].insert(0, note)
 
@@ -2116,7 +2218,7 @@ def find_player_pxp(data, team, num, name):
 	return found
 
 def rm_player(data, name):
-	namera=re.split('\s+', name)
+	namera=re.split('[ ]+', name)
 	team=namera.pop(0)
 	num=re.sub('[^0-9]+', '', namera.pop(0))
 	if name.upper() == name:
@@ -2196,7 +2298,7 @@ def rm_player(data, name):
 	return data
 
 def add_player(data, name, nhlid, pos="F", scratch=False):
-	namera=re.split('\s+', name)
+	namera=re.split('[ ]+', name)
 	team=namera.pop(0)
 	num=re.sub('[^0-9]+', '', namera.pop(0))
 	if name.upper() == name:
@@ -2551,7 +2653,7 @@ def parsedesc(format, desc, play, player_lookup):
 					print("  desc="+desc+"|")
 
 				if leading != discard:
-					desc=re.sub('^\s+', '', desc)
+					desc=re.sub('^[ ]+', '', desc)
 					if debug:
 						print("Leading space needs to get thrown out too?")
 						print("  desc="+desc+"|")
@@ -2581,7 +2683,7 @@ def parsedesc(format, desc, play, player_lookup):
 				if debug:
 					for match in re.findall('[0-9]+', desc):
 						for similar in player_lookup:
-							if re.search('(^|#|\s)'+re.escape(desc[template_match.start():template_match.end()])+'(\s|$)', similar):
+							if re.search('(^|#|[ ])'+re.escape(desc[template_match.start():template_match.end()])+'([ ]|$)', similar):
 								print("-"+similar)
 
 				if debug:
@@ -2594,7 +2696,7 @@ def parsedesc(format, desc, play, player_lookup):
 					blockdesc=re.sub(re.escape(block)+'.*$', '', desc)
 					if debug:
 						print("   Searching in "+blockdesc)
-				ra=re.split('[\s\t,()]+', blockdesc)
+				ra=re.split('[[ ]\t,()]+', blockdesc)
 				if lastteam is not None and not re.match('[-.A-Z][-.A-Z][-.A-Z]', ra[0]):
 					ra.insert(0, lastteam)
 
@@ -2616,11 +2718,11 @@ def parsedesc(format, desc, play, player_lookup):
 					print("Value = "+' '.join(ra[0:i]))
 				value_match = re.match('^.*?'+' '.join(ra[1:i]), desc)
 				if value_match is None:
-					value_match = re.match('[-.A-Z][-.A-Z][-.A-Z]\s+TEAM', desc)
+					value_match = re.match('[-.A-Z][-.A-Z][-.A-Z][ ]+TEAM', desc)
 					if debug:
 						print("Special case for TEAM")
 				if value_match is None:
-					value_match = re.match('[-.A-Z][-.A-Z][-.A-Z]\s+[#]', desc)
+					value_match = re.match('[-.A-Z][-.A-Z][-.A-Z][ ]+[#]', desc)
 					if debug:
 						print("Special case for TEAM #")
 				if value_match is None:
@@ -2632,7 +2734,7 @@ def parsedesc(format, desc, play, player_lookup):
 					print("            = "+desc[value_match.start():value_match.end()])
 
 			elif template[type_i+1:] == 'time':
-				value_match=re.match('[0-9]+[:][0-9]+\s+[A-Z]+', desc)
+				value_match=re.match('[0-9]+[:][0-9]+[ ]+[A-Z]+', desc)
 
 			elif template[type_i+1:] == 'penalty':
 				if debug:
@@ -2640,15 +2742,15 @@ def parsedesc(format, desc, play, player_lookup):
 				if re.search('[(]maj[)]', desc):
 #					desc=re.sub('[(]maj[)]', '', desc)
 					play['Severity']='major'
-				if re.search('\s*[-]\s*double\s+minor\s*[(]', desc):
-#					desc=re.sub('\s*[-]\s*double\s+minor\s*[(]', '(', desc)
+				if re.search('[ ]*[-][ ]*double[ ]+minor[ ]*[(]', desc):
+#					desc=re.sub('[ ]*[-][ ]*double[ ]+minor[ ]*[(]', '(', desc)
 					play['Severity']='double minor'
-				if re.search('\s*[-]\s*[mM]isconduct\s*[(]', desc):
-#					desc=re.sub('\s*[-]\s*[mM]isconduct\s*[(]', '(', desc)
+				if re.search('[ ]*[-][ ]*[mM]isconduct[ ]*[(]', desc):
+#					desc=re.sub('[ ]*[-][ ]*[mM]isconduct[ ]*[(]', '(', desc)
 					play['Severity']='misconduct'
 
-				if re.search('\s*[-]\s*[bB]ench[(]', desc):
-#					desc=re.sub('\s*[-]\s*[bB]ench[(]', '(', desc)
+				if re.search('[ ]*[-][ ]*[bB]ench[(]', desc):
+#					desc=re.sub('[ ]*[-][ ]*[bB]ench[(]', '(', desc)
 					if 'PenaltyOn' not in play:
 						play['PenaltyOn']=['bench']
 
@@ -2656,20 +2758,20 @@ def parsedesc(format, desc, play, player_lookup):
 #					desc=re.sub('^PS[-]', '', desc)
 					play['Penalty Shot']=True
 
-#				if re.search('\s*on\s+breakaway\s*[(]', desc):
-#					desc=re.sub('\s*on\s+breakaway\s*[(]', '(', desc)
+#				if re.search('[ ]*on[ ]+breakaway[ ]*[(]', desc):
+#					desc=re.sub('[ ]*on[ ]+breakaway[ ]*[(]', '(', desc)
 
-#				if re.search('(\s*[(][^)]*[)]\s*)*([(][^)]*[)])', desc):
-#					desc=re.sub('(\s*[(][^)]*[)]\s*)*([(][^)]*[)])', r'\2', desc)
+#				if re.search('([ ]*[(][^)]*[)][ ]*)*([(][^)]*[)])', desc):
+#					desc=re.sub('([ ]*[(][^)]*[)][ ]*)*([(][^)]*[)])', r'\2', desc)
 
 				if debug:
 					print("Ending as :"+desc)
 
 #				types=['Abuse of officials', 'Abusive language', 'Aggressor', 'Bench', 'Boarding', 'Broken stick', 'Butt ending', 'Charging', 'Clipping', 'Closing hand on puck', 'Covering puck in crease', 'Cross checking', 'Cross-checking', 'Delay Game', 'Delay Game - Bench - FO Viol', 'Delay Game - Bench - FO viol', 'Delay Game - Equipment', 'Delay Game - FO Viol - hand', 'Delay Game - Goalie - restrict', 'Delay Game - Puck over glass', 'Delay Game - Smothering puck', 'Delay Game - Unsucc chlg', 'Delay Game - Unsucc chlg - dbl', 'Elbowing', 'Embellishment', 'Fighting', 'Game Misconduct', 'Game Misconduct - Head coach', 'Goalkeeper displaced net', 'Goalie leave crease', 'Hi stick', 'Hi-sticking', 'High-sticking', 'Holding', 'Holding stick', 'Holding the stick', 'Hooking', 'Illegal check to head', 'Illegal stick', 'Instigator', 'Interference', 'Interference on goalkeeper', 'Kneeing', 'Match [Pp]enalty', 'Minor', 'Misconduct', "Playing without a helmet", "Puck thrown fwd - Goalkeeper", "Removing opponent's helmet", 'Roughing', 'Roughing - Removing opp helmet', 'Slash', 'Slashing', 'Spearing', 'Throwing equipment', 'Throwing stick', 'Throw object at puck', 'Too many men/ice', 'Tripping', 'Unsportsmanlike conduct']
 #				for type in types:
-#					value_match=re.match(type+'\s*[(][^)]*[)]', desc)
+#					value_match=re.match(type+'[ ]*[(][^)]*[)]', desc)
 #					if value_match is not None:
-#						t=re.sub('^.*'+type+'\s*[(]', '', desc)
+#						t=re.sub('^.*'+type+'[ ]*[(]', '', desc)
 #						t=re.sub('[)].*$', '', t)
 #						play['PIMs']=t
 #						break
@@ -2751,8 +2853,8 @@ def parsedesc(format, desc, play, player_lookup):
 				play[k]=value
 
 			if template[type_i+1:] == 'player' and play[k][-1] in player_lookup:
-				if re.match('[-.A-Z][-.A-Z][-.A-Z]\s', play[k][-1]):
-					lastteam=re.sub('\s.*$', '', play[k][-1])
+				if re.match('[-.A-Z][-.A-Z][-.A-Z][ ]', play[k][-1]):
+					lastteam=re.sub('[ ].*$', '', play[k][-1])
 				play[k][-1]=player_lookup[play[k][-1]]
 			elif template[type_i+1:] == 'team':
 				lastteam=play[k]
@@ -2779,30 +2881,30 @@ def parse_pl(data, collated):
 			#DET #23 RAYMOND OPPONENT-BLOCKED BY PIT #22 POULIN, Wrist, Def. Zone
 			parsera=re.split(',', plplay['Description'])
 			for i in range(0, len(parsera)):
-				if re.search('[0-9]+\s+ft[.]', parsera[i]):
-					parsera[i]=re.sub('[0-9]+\s+ft[.]', '{{Distance|distance}}', parsera[i])
-				elif re.search('\s+OPPONENT[-]BLOCKED\s+BY\s+', parsera[i]):
-					shooter=re.sub('\s+OPPONENT[-]BLOCKED\s+BY.*$', '', parsera[i])
-					shooter=re.sub('^\s*', '', shooter)
-					blocker=re.sub('^.*OPPONENT[-]BLOCKED\s+BY\s+', '', parsera[i])
-					blocker=re.sub('\s*$', '', blocker)
+				if re.search('[0-9]+[ ]+ft[.]', parsera[i]):
+					parsera[i]=re.sub('[0-9]+[ ]+ft[.]', '{{Distance|distance}}', parsera[i])
+				elif re.search('[ ]+OPPONENT[-]BLOCKED[ ]+BY[ ]+', parsera[i]):
+					shooter=re.sub('[ ]+OPPONENT[-]BLOCKED[ ]+BY.*$', '', parsera[i])
+					shooter=re.sub('^[ ]*', '', shooter)
+					blocker=re.sub('^.*OPPONENT[-]BLOCKED[ ]+BY[ ]+', '', parsera[i])
+					blocker=re.sub('[ ]*$', '', blocker)
 					parsera[i]=re.sub(shooter, '{{Shooter|player}}', parsera[i])
 					if blocker != 'OTHER':
 						parsera[i]=re.sub(blocker, '{{Blocker|player}}', parsera[i])
-				elif re.search('\s+TEAMMATE[-]BLOCKED\s+BY\s+', parsera[i]):
-					shooter=re.sub('\s+TEAMMATE[-]BLOCKED\s+BY.*$', '', parsera[i])
-					shooter=re.sub('^\s*', '', shooter)
-					blocker=re.sub('^.*TEAMMATE[-]BLOCKED\s+BY\s+', '', parsera[i])
-					blocker=re.sub('\s*$', '', blocker)
+				elif re.search('[ ]+TEAMMATE[-]BLOCKED[ ]+BY[ ]+', parsera[i]):
+					shooter=re.sub('[ ]+TEAMMATE[-]BLOCKED[ ]+BY.*$', '', parsera[i])
+					shooter=re.sub('^[ ]*', '', shooter)
+					blocker=re.sub('^.*TEAMMATE[-]BLOCKED[ ]+BY[ ]+', '', parsera[i])
+					blocker=re.sub('[ ]*$', '', blocker)
 					parsera[i]=re.sub(shooter, '{{Shooter|player}}', parsera[i])
 					if blocker != 'OTHER':
 						parsera[i]=re.sub(blocker, '{{Blocker|player}}', parsera[i])
 					parsera[i]=re.sub(shooter, '{{Shooter|player}}', parsera[i])
-				elif re.search('\s+BLOCKED BY\s+', parsera[i]):
-					shooter=re.sub('\s+BLOCKED\s+BY.*$', '', parsera[i])
-					shooter=re.sub('^\s*', '', shooter)
-					blocker=re.sub('^.*\s+BLOCKED\s+BY\s+', '', parsera[i])
-					blocker=re.sub('\s*$', '', blocker)
+				elif re.search('[ ]+BLOCKED BY[ ]+', parsera[i]):
+					shooter=re.sub('[ ]+BLOCKED[ ]+BY.*$', '', parsera[i])
+					shooter=re.sub('^[ ]*', '', shooter)
+					blocker=re.sub('^.*[ ]+BLOCKED[ ]+BY[ ]+', '', parsera[i])
+					blocker=re.sub('[ ]*$', '', blocker)
 					parsera[i]=re.sub(shooter, '{{Shooter|player}}', parsera[i])
 					if blocker != 'OTHER' and blocker != 'TEAMMATE':
 						parsera[i]=re.sub(blocker, '{{Blocker|player}}', parsera[i])
@@ -2817,7 +2919,7 @@ def parse_pl(data, collated):
 						parsera[i]=re.sub(shot, '{{Shot|shot}}', parsera[i])
 						continue
 
-					if re.search('^\s*Defensive\s+Deflection\s*$', parsera[i]):
+					if re.search('^[ ]*Defensive[ ]+Deflection[ ]*$', parsera[i]):
 						continue
 
 					print("Unknown in BLOCK: "+parsera[i])
@@ -2845,14 +2947,14 @@ def parse_pl(data, collated):
 			#Neu. Zone - LAK #36 TYNAN vs ANA #39 CARRICK|
 
 
-			homefo=re.sub('^.*\s+vs\s+', '', plplay['Description'])
-			homefo=re.sub('\s*$', '', homefo)
-			awayfo=re.sub('\s+vs\s+.*$', '', plplay['Description'])
-			awayfo=re.sub('^.*\s+[-]\s+', '', awayfo)
-			team=re.sub('\s+won\s+.*$', '', plplay['Description'])
-			team=re.sub('^\s*', '', team)
-			zone=re.sub('\s+[-]\s+.*$', '', plplay['Description'])
-			zone=re.sub('^.*\s+won\s+', '', zone)
+			homefo=re.sub('^.*[ ]+vs[ ]+', '', plplay['Description'])
+			homefo=re.sub('[ ]*$', '', homefo)
+			awayfo=re.sub('[ ]+vs[ ]+.*$', '', plplay['Description'])
+			awayfo=re.sub('^.*[ ]+[-][ ]+', '', awayfo)
+			team=re.sub('[ ]+won[ ]+.*$', '', plplay['Description'])
+			team=re.sub('^[ ]*', '', team)
+			zone=re.sub('[ ]+[-][ ]+.*$', '', plplay['Description'])
+			zone=re.sub('^.*[ ]+won[ ]+', '', zone)
 
 			desc=plplay['Description']
 			if len(homefo) > 0:
@@ -2891,25 +2993,25 @@ def parse_pl(data, collated):
 				elif re.search('Penalty Shot', parsera[i]):
 					change=True
 
-				if re.search('[0-9]+\s+ft[.]', parsera[i]):
+				if re.search('[0-9]+[ ]+ft[.]', parsera[i]):
 					change=True
-					parsera[i]=re.sub('[0-9]+\s+ft[.]', '{{Distance|distance}}', parsera[i])
+					parsera[i]=re.sub('[0-9]+[ ]+ft[.]', '{{Distance|distance}}', parsera[i])
 
-				if re.search('Assists:\s+[#][0-9]+\s+[^(]+[(][0-9]+[)][;]\s+[#][0-9]+\s+[^(]+[(][0-9]+[)]', parsera[i]):
+				if re.search('Assists:[ ]+[#][0-9]+[ ]+[^(]+[(][0-9]+[)][;][ ]+[#][0-9]+[ ]+[^(]+[(][0-9]+[)]', parsera[i]):
 					change=True
-					parsera[i]=re.sub('Assists:\s+[#][0-9]+\s+[^(]+[(][0-9]+[)][;]\s+[#][0-9]+\s+[^(]+[(][0-9]+[)]', 'Assists: {{Primary Assister|player}}({{Primary Assists|number}}); {{Secondary Assister|player}}({{Secondary Assists|number}})', parsera[i])
-				elif re.search('Assist:\s+[#][0-9]+\s+[^(]+[(][0-9]+[)]', parsera[i]):
+					parsera[i]=re.sub('Assists:[ ]+[#][0-9]+[ ]+[^(]+[(][0-9]+[)][;][ ]+[#][0-9]+[ ]+[^(]+[(][0-9]+[)]', 'Assists: {{Primary Assister|player}}({{Primary Assists|number}}); {{Secondary Assister|player}}({{Secondary Assists|number}})', parsera[i])
+				elif re.search('Assist:[ ]+[#][0-9]+[ ]+[^(]+[(][0-9]+[)]', parsera[i]):
 					change=True
-					parsera[i]=re.sub('Assist:\s+[#][0-9]+\s+[^(]+[(][0-9]+[)]', "Assist: {{Primary Assister|player}}({{Primary Assists|number}})", parsera[i])
-				elif re.search('^\s*[A-Z.][A-Z.][A-Z.]\s+[#][0-9]+\s+[^(]+[(][0-9]+[)]', parsera[i]):
+					parsera[i]=re.sub('Assist:[ ]+[#][0-9]+[ ]+[^(]+[(][0-9]+[)]', "Assist: {{Primary Assister|player}}({{Primary Assists|number}})", parsera[i])
+				elif re.search('^[ ]*[A-Z.][A-Z.][A-Z.][ ]+[#][0-9]+[ ]+[^(]+[(][0-9]+[)]', parsera[i]):
 					change=True
-					parsera[i]=re.sub('^\s*[A-Z.][A-Z.][A-Z.]\s+[#][0-9]+\s+[^(]+[(][0-9]+[)]', '{{Shooter|player}}({{ngoals|number}})', parsera[i])
-				elif re.search('[#][0-9]+\s+[^(]+[(][0-9]+[)]', parsera[i]):
+					parsera[i]=re.sub('^[ ]*[A-Z.][A-Z.][A-Z.][ ]+[#][0-9]+[ ]+[^(]+[(][0-9]+[)]', '{{Shooter|player}}({{ngoals|number}})', parsera[i])
+				elif re.search('[#][0-9]+[ ]+[^(]+[(][0-9]+[)]', parsera[i]):
 					change=True
-					parsera[i]=re.sub('[#][0-9]+\s+[^(]+[(][0-9]+[)]', '{{Shooter|player}}({{ngoals|number}})', parsera[i])
-				elif re.search('[#][0-9]+\s+.*\S', parsera[i]):
+					parsera[i]=re.sub('[#][0-9]+[ ]+[^(]+[(][0-9]+[)]', '{{Shooter|player}}({{ngoals|number}})', parsera[i])
+				elif re.search('[#][0-9]+[ ]+.*\S', parsera[i]):
 					change=True
-					parsera[i]=re.sub('[#][0-9]+\s+.*\S', '{{Shooter|player}}', parsera[i])
+					parsera[i]=re.sub('[#][0-9]+[ ]+.*\S', '{{Shooter|player}}', parsera[i])
 
 				zone=zone_type(parsera[i])
 				if zone is not None:
@@ -2921,7 +3023,7 @@ def parse_pl(data, collated):
 					change=True
 					parsera[i]=re.sub(shot, '{{Shot|shot}}', parsera[i])
 
-				if re.search('^\s*Defensive\s+Deflection\s*$', parsera[i]):
+				if re.search('^[ ]*Defensive[ ]+Deflection[ ]*$', parsera[i]):
 					continue
 
 				if not change:
@@ -2960,11 +3062,11 @@ def parse_pl(data, collated):
 			#Defensive Deflection
 			#Penalty Shot
 
-			dist=re.search('[0-9]+\s+ft[.]', template)
+			dist=re.search('[0-9]+[ ]+ft[.]', template)
 			if dist is not None:
 				template=template[0:dist.start()]+'{{Distance|distance}}'+template[dist.end():]
 
-			player=re.search('[A-Z][A-Z][A-Z]\s+#[^,]+', template)
+			player=re.search('[A-Z][A-Z][A-Z][ ]+#[^,]+', template)
 			if player is not None:
 				template=template[0:player.start()]+'{{Shooter|player}}'+template[player.end():]
 
@@ -2978,10 +3080,11 @@ def parse_pl(data, collated):
 #			#desc=PIT #35 JARRY Butt ending - double minor(4 min) Served By: #43 HEINEN, #18 LAFFERTY, Neu. Zone Drawn By: NJD #55 GEERTSEN
 #			#desc=CAR #20 AHO\u00a0Cross-checking(2 min) Served By: #13 PULJUJARVI, Def. Zone Drawn By: NJD #86 HUGHES
 #			#ANA #26 MCGINN Interference(2 min) Drawn By: LAK #81 BOOTH
+#CHI TEAM\u00a0Delay Game - Unsucc chlg(2 min) Served By: #94 PERRY, Neu. Zone
 			desc=plplay['Description']
 			print('Penalty start:'+desc+'|')
-			if re.search('Drawn By: [A-Z][A-Z][A-Z]\s+#\s*', desc):
-				value_match=re.search('Drawn\s+By:\s*[A-Z][A-Z][A-Z]\s+#', desc)
+			if re.search('Drawn By: [A-Z][A-Z][A-Z][ ]+#[ ]*', desc):
+				value_match=re.search('Drawn[ ]+By:[ ]*[A-Z][A-Z][A-Z][ ]+#', desc)
 				start=0
 				end=len(desc)
 				if value_match.start() is not None:
@@ -3001,8 +3104,26 @@ def parse_pl(data, collated):
 
 
 			print('Post-Drawn:'+desc+'|')
-			if re.search('Served By: [A-Z][A-Z][A-Z]\s+#\s*', desc):
-				value_match=re.search('Served\s+By:\s*[A-Z][A-Z][A-Z]\s+#', desc)
+			if re.search('Served By: [A-Z][A-Z][A-Z][ ]+#[ ]*', desc):
+				value_match=re.search('Served[ ]+By:[ ]*[A-Z][A-Z][A-Z][ ]+#', desc)
+				start=0
+				end=len(desc)
+				if value_match.start() is not None:
+					start=value_match.start()+9
+				while desc[start] != ':':
+					start=start+1
+				while desc[start] == ':':
+					start=start+1
+				while desc[start] == ' ':
+					start=start+1
+				if value_match.end() is not None:
+					end=value_match.end()
+				for j in range(len(desc), end, -1):
+					if desc[start:j] in collated['lookup']['players']:
+						desc=desc[0:start]+'{{ServedBy|player}}'+desc[j:]
+						break
+			elif re.search('Served By:[ ]*#[ ]*', desc):
+				value_match=re.search('Served[ ]+By:[ ]*#', desc)
 				start=0
 				end=len(desc)
 				if value_match.start() is not None:
@@ -3021,8 +3142,8 @@ def parse_pl(data, collated):
 						break
 
 			print('Post-Served:'+desc+'|')
-			if re.search('[A-Z][A-Z][A-Z]\s+#\s*', desc):
-				value_match=re.search('[A-Z][A-Z][A-Z]\s+#', desc)
+			if re.search('[A-Z][A-Z][A-Z][ ]+#[ ]*', desc):
+				value_match=re.search('[A-Z][A-Z][A-Z][ ]+#', desc)
 				end=len(desc)
 				if value_match.end() is not None:
 					end=value_match.end()
@@ -3057,9 +3178,9 @@ def parse_pl(data, collated):
 			play=parsedesc(desc, plplay['Description'], play, collated['lookup']['players'])
 
 #			desc=None
-#			if re.search('^[-.A-Z][-.A-Z][-.A-Z]\s+TEAM', plplay['Description']):
+#			if re.search('^[-.A-Z][-.A-Z][-.A-Z][ ]+TEAM', plplay['Description']):
 #				desc=plplay['Description'][0:8]
-#			elif re.search('^[-.A-Z][-.A-Z][-.A-Z]\s+#\s+', plplay['Description']):
+#			elif re.search('^[-.A-Z][-.A-Z][-.A-Z][ ]+#[ ]+', plplay['Description']):
 #				desc=plplay['Description'][0:6]
 #			else:
 #				desc="{{PenaltyOn|player}}"
@@ -3069,7 +3190,7 @@ def parse_pl(data, collated):
 #			desc=desc+" {{Penalty|penalty}}"
 #
 #			if re.search('Served By:', plplay['Description']):
-#				servedtxt=re.sub('^.*Served By:\s*', '', plplay['Description'])
+#				servedtxt=re.sub('^.*Served By:[ ]*', '', plplay['Description'])
 #				servedtxt=re.sub(', [OND][fe][fu][.] Zone.*', '', servedtxt)
 #				nserved=len(servedtxt.split(','))-1
 #				desc=desc+" Served By: {{ServedBy|player}}"
@@ -3077,11 +3198,11 @@ def parse_pl(data, collated):
 #					desc=desc+", {{ServedBy|player}}"
 #					nserved=nserved-1
 #
-#			if re.search('[OND][ef][fu][.]\s+Zone', plplay['Description']):
+#			if re.search('[OND][ef][fu][.][ ]+Zone', plplay['Description']):
 #				desc=desc+", {{SubZone|zone}}"
 #
 #			if re.search('Drawn By:', plplay['Description']):
-#				drawntxt=re.sub('^.*Drawn By:\s*', '', plplay['Description'])
+#				drawntxt=re.sub('^.*Drawn By:[ ]*', '', plplay['Description'])
 #				ndrawn=len(drawntxt.split(','))-1
 #				desc=desc+" Drawn By: {{DrawnBy|player}}"
 #				while ndrawn > 0:
@@ -3098,7 +3219,7 @@ def parse_pl(data, collated):
 		elif plplay['Event'] == 'SHOT':
 			#EDM ONGOAL - #97 MCDAVID, Wrist, Off. Zone, 11 ft.
 			#DAL ONGOAL - # , 0 ft.
-			#if re.search('Penalty\s+Shot', plplay['Description']):
+			#if re.search('Penalty[ ]+Shot', plplay['Description']):
 			#	play=parsedesc("{{Shooter Team|team}} ONGOAL - {{Shooter|player}}, Penalty Shot, {{Shot Type|shot}}, {{SubZone|zone}}, {{Distance|distance}}", plplay['Description'], play, collated['lookup']['players'])
 			#	play['Reason']='Penalty Shot'
 			#elif re.search('^[^,]*[,][^,]*$', plplay['Description']):
@@ -3120,11 +3241,11 @@ def parse_pl(data, collated):
 			#Defensive Deflection
 			#Penalty Shot
 
-			dist=re.search('[0-9]+\s+ft[.]', template)
+			dist=re.search('[0-9]+[ ]+ft[.]', template)
 			if dist is not None:
 				template=template[0:dist.start()]+'{{Distance|distance}}'+template[dist.end():]
 
-			team=re.search('[A-Z][A-Z][A-Z]\s+ONGOAL', template)
+			team=re.search('[A-Z][A-Z][A-Z][ ]+ONGOAL', template)
 			if team is not None:
 				template=template[0:team.start()]+'{{Shooter Team|team}}'+template[team.start()+3:]
 
@@ -3160,7 +3281,7 @@ def parse_pl(data, collated):
 							play[abv].append(id)
 							break
 
-		if 'Per' not in plplay or re.search('^\s*$', plplay['Per']):
+		if 'Per' not in plplay or re.search('^[ ]*$', plplay['Per']):
 			play['Period'] = 0
 		else:
 			play['Period'] = plplay['Per']
@@ -3323,21 +3444,15 @@ def add_stops(collated, playi):
 				play['changes'].append(reserve.pop())
 
 		collated['temp']['stop']=False
-	elif play['PLEvent'] == 'EIEND':
-		collated['temp']['stop']=True
-	elif play['PLEvent'] == 'EISTR':
-		collated['temp']['stop']=True
-	elif play['PLEvent'] == 'GEND':
-		collated['temp']['stop']=True
-	elif play['PLEvent'] == 'GOAL':
-		collated['temp']['stop']=True
-	elif play['PLEvent'] == 'PEND':
-		collated['temp']['stop']=True
-	elif play['PLEvent'] == 'PENL':
-		collated['temp']['stop']=True
-	elif play['PLEvent'] == 'STOP':
-		collated['temp']['stop']=True
+	else:
+		for stopevent in ['EISTR', 'EIEND', 'GEND', 'GOAL', 'PEND', 'PENL', 'STOP']:
+			if play['PLEvent'] == stopevent:
+				collated['temp']['stop']=True
+				break
+
 	play['Stopped']=collated['temp']['stop']
+	print("stops: "+str(play['dt'])+" "+play['PLEvent']+" "+play['Stopped'])
+	sys.stdin.readline()
 
 	collated['plays'][playi]=play
 
@@ -3358,6 +3473,7 @@ def add_strength(collated, playi):
 	return collated
 
 def merge_loop(data, collated):
+	debug=False
 	lastlive=0
 
 	collated['temp']={}
@@ -3365,28 +3481,49 @@ def merge_loop(data, collated):
 	collated['temp']['toi']=build_toi_tree(collated)
 	
 	while playi < len(collated['plays']):
+		print("Starting "+str(playi)+"/"+str(len(collated['plays'])))
 		#Use lists of players to create off/stay/on
+		if debug:
+			print("   onice")
 		collated=get_onice_one(collated, playi)
 
 		#Use off/stay/on data to create changes with related TH/TV data
+		if debug:
+			print("   merge toi")
 		collated=merge_toi_one(collated, playi)
 
+		if debug:
+			print("   merge live")
 		collated=merge_pl_live_one(data, collated, playi)
 
+		if debug:
+			print("   merge pxp")
 		collated=merge_pl_pxp_one(data, collated, playi)
 
+		if debug:
+			print("   add stops")
 		collated=add_stops(collated, playi)
 
+		if debug:
+			print("   add strength")
 		collated=add_strength(collated, playi)
 
+		if debug:
+			print("   add icing")
 		collated=add_icing(collated, playi)
 
+		if debug:
+			print("   add zone")
 		collated=add_zone(collated, playi)
+		if debug:
+			print("Ending "+str(playi)+"/"+str(len(collated['plays'])))
 
 		if 'changes' in collated['plays'][playi]:
+			if debug:
+				print("Adding changes from "+str(playi)+"/"+str(len(collated['plays'])))
 			addplays=collated['plays'][playi]['changes']
 			for change in addplays:
-				if 'Stopped' in collated['plays'][playi]:
+				if 'Stopped' in collated['plays'][playi] and collated['plays'][playi]['Stopped']:
 					change['Stopped']=True
 				else:
 					change['Stopped']=False
@@ -3395,6 +3532,8 @@ def merge_loop(data, collated):
 			del(collated['plays'][playi]['changes'])
 
 		playi=playi+1
+	if debug:
+		print("Done with plays")
 
 	del(collated['temp'])
 
@@ -3435,8 +3574,8 @@ def get_namenum(collated, nhlid):
 	
 	namenum=collated['players'][nhlid]['Name']
 	namenum=re.sub('^[^#]*', '', namenum)
-	namenum=re.sub('\s*$', '', namenum)
-	namenum=re.sub('\s.*\s', ' ', namenum)
+	namenum=re.sub('[ ]*$', '', namenum)
+	namenum=re.sub('[ ].*[ ]', ' ', namenum)
 	return namenum
 
 def print_play(collated, playi):
@@ -3542,7 +3681,7 @@ def get_onice_one(collated, playi):
 					nhlid=str(n)
 					if n == '':
 						continue
-					if re.match('^\s*[0-9]+\s*$', n):
+					if re.match('^[ ]*[0-9]+[ ]*$', n):
 						pass
 					elif n in collated['exclude']['players']:
 						continue
@@ -3837,12 +3976,18 @@ def merge_pl_pxp_one(data, collated, playi, start=0):
 
 	for i in range(0, len(data['PXP']['plays'])):
 		pxplay=data['PXP']['plays'][i]
+
+		if 'period' not in pxplay:
+			continue
+
 		if pxplay['period'] == 'SO':
 			pxplay['period']=5
 			data['PXP']['plays'][i]=pxplay
+
 		if pxplay['period'] > int(play['Period']):
 			starti=i
 			break
+
 		dt=decimaltime(pxplay['timeInPeriod'], pxplay['period'])
 		if dt >= play['dt']:
 			starti=i
@@ -3851,6 +3996,9 @@ def merge_pl_pxp_one(data, collated, playi, start=0):
 	for i in range(starti+1, len(data['PXP']['plays'])):
 		endi=i
 		pxplay=data['PXP']['plays'][i]
+
+		if 'period' not in pxplay:
+			continue
 		if pxplay['period'] == 'SO':
 			pxplay['period']=5
 			data['PXP']['plays'][i]=pxplay
@@ -4021,6 +4169,7 @@ def merge_pl_pxp_one(data, collated, playi, start=0):
 			pxplay=data['PXP']['plays'][i]
 			print(json.dumps(pxplay, indent=3))
 		print(json.dumps(collated['plays'][playi], indent=3))
+	print("Done")
 		
 
 #	if play['PLEvent'] == 'GOAL':
@@ -4168,12 +4317,12 @@ def merge_pl_live_one(data, collated, playi, start=0):
 					if re.search('Unsportsmanlike conduct', play['PL']['Description']):
 						if liveplay['result']['secondaryType'] == 'Unsportsmanlike conduct':
 							match=True
-						elif re.search('[Uu]nsportsmanlike\s+[Cc]onduct', liveplay['result']['description']):
+						elif re.search('[Uu]nsportsmanlike[ ]+[Cc]onduct', liveplay['result']['description']):
 							match=True
 					else:
 						if liveplay['result']['secondaryType'] == 'Unsportsmanlike conduct':
 							pass
-						elif re.search('[Uu]nsportsmanlike\s+[Cc]onduct', liveplay['result']['description']):
+						elif re.search('[Uu]nsportsmanlike[ ]+[Cc]onduct', liveplay['result']['description']):
 							pass
 						else:
 							match=True
@@ -4193,7 +4342,7 @@ def merge_pl_live_one(data, collated, playi, start=0):
 				elif re.search('Missing key', liveplay['result']['description']):
 					match=True
 			elif liveplay['result']['eventTypeId'] == 'CHALLENGE':
-				if re.search('^\s*CHLG', play['PL']['Description']):
+				if re.search('^[ ]*CHLG', play['PL']['Description']):
 					match=True
 		elif play['PLEvent'] == 'TAKE':
 			if liveplay['result']['event'] == 'Takeaway':
@@ -4388,9 +4537,11 @@ def process_game(game):
 				if 'status' in newdata and newdata['status'] == 'Ongoing':
 					print(str(data['PXP']['gameState'])+" == OFF/FINAL")
 					print(str(data['PXP']['gameScheduleState'])+" == OK")
-					print(str(data['PL'][-1]['Event'])+" == GEND/GOFF")
+					if len(data['PL']) > 0:
+						print(str(data['PL'][-1]['Event'])+" == GEND/GOFF")
 					print(str(data['PXP']['plays'][-1]['typeDescKey'])+" == shootout-complete/game-end")
-					print(str(data['PXP']['plays'][-1]['typeCode'])+" == 523, 524, 527")
+					if len(data['PXP']['plays']) > 0:
+						print(str(data['PXP']['plays'][-1]['typeCode'])+" == 523, 524, 527")
 					print(str(data['PXP']['clock']['running'])+" == false")
 					print(str(data['PXP']['clock']['inIntermission'])+" == false")
 					print("Game: "+str(newdata['GAME']['gamePk']))
@@ -4483,6 +4634,7 @@ def process_game(game):
 					break
 
 		except KeyError as e:
+			print(e)
 			pass
 
 		print("Writing game: "+str(season)+"/"+str(type)+"/"+str(gamenum))
@@ -4635,6 +4787,7 @@ def get_season(season):
 
 def main():
 	games=[]
+	single_thread=False
 	if len(sys.argv) > 1:
 		for i in range(1, len(sys.argv)):
 			if re.match('[0-9]+[/][0-9]+[/][0-9]+', sys.argv[i]):
@@ -4654,6 +4807,8 @@ def main():
 				games=get_season(sys.argv[i])
 			elif re.search('^[0-9][0-9][0-9][0-9]0[0-9][0-9][0-9][0-9][0-9]$', sys.argv[i]):
 				games.append(make_game_struct(sys.argv[i]))
+			elif sys.argv[i] == "-1":
+				single_thread=True
 
 	else:
 		day=datetime.timedelta(days=1)
@@ -4665,7 +4820,11 @@ def main():
 				games.append(game)
 			now=now-day
 
-	with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
-		executor.map(thread_main, games)
+	if single_thread:
+		for game in games:
+			thread_main(game)
+	else:
+		with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+			executor.map(thread_main, games)
 
 main()
