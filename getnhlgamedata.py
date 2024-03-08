@@ -3525,8 +3525,12 @@ def merge_loop(data, collated):
 			if debug:
 				print("Adding changes from "+str(playi)+"/"+str(len(collated['plays'])))
 			addplays=collated['plays'][playi]['changes']
+
+			stopped=True
+			if playi > 0:
+				stopped=collated['plays'][playi-1]['Stopped']
 			for change in addplays:
-				change['Stopped']=collated['temp']['stop']
+				change['Stopped']=stopped
 				collated['plays'].insert(playi, change)
 				playi=playi+1
 			del(collated['plays'][playi]['changes'])
