@@ -2772,23 +2772,18 @@ def parsedesc(formatspec, desc, play, player_lookup):
 				if debug:
 					print("Ending as :"+desc)
 
-#				types=['Abuse of officials', 'Abusive language', 'Aggressor', 'Bench', 'Boarding', 'Broken stick', 'Butt ending', 'Charging', 'Clipping', 'Closing hand on puck', 'Covering puck in crease', 'Cross checking', 'Cross-checking', 'Delay Game', 'Delay Game - Bench - FO Viol', 'Delay Game - Bench - FO viol', 'Delay Game - Equipment', 'Delay Game - FO Viol - hand', 'Delay Game - Goalie - restrict', 'Delay Game - Puck over glass', 'Delay Game - Smothering puck', 'Delay Game - Unsucc chlg', 'Delay Game - Unsucc chlg - dbl', 'Elbowing', 'Embellishment', 'Fighting', 'Game Misconduct', 'Game Misconduct - Head coach', 'Goalkeeper displaced net', 'Goalie leave crease', 'Hi stick', 'Hi-sticking', 'High-sticking', 'Holding', 'Holding stick', 'Holding the stick', 'Hooking', 'Illegal check to head', 'Illegal stick', 'Instigator', 'Interference', 'Interference on goalkeeper', 'Kneeing', 'Match [Pp]enalty', 'Minor', 'Misconduct', "Playing without a helmet", "Puck thrown fwd - Goalkeeper", "Removing opponent's helmet", 'Roughing', 'Roughing - Removing opp helmet', 'Slash', 'Slashing', 'Spearing', 'Throwing equipment', 'Throwing stick', 'Throw object at puck', 'Too many men/ice', 'Tripping', 'Unsportsmanlike conduct']
-#				for type in types:
-#					value_match=re.match(type+'[ \t\n\r\f\v]*[(][^)]*[)]', desc)
-#					if value_match is not None:
-#						t=re.sub('^.*'+type+'[ \t\n\r\f\v]*[(]', '', desc)
-#						t=re.sub('[)].*$', '', t)
-#						play['PIMs']=t
-#						break
-
-
 				penalty=penalty_type(desc)
 				if penalty is not None:
 					value_match=re.match(penalty, desc)
 					if value_match is not None:
-						t=re.sub('^[^(]*[(]', '', desc)
-						t=re.sub('[)].*$', '', t)
-						play['PIMs']=t
+						t=re.sub('^.*[(]([0-9]+)[ \t\n\r\f\v]+min[)].*$', '\\1', desc)
+						try:
+							play['PIMs']=int(t)
+						except ValueError as e:
+							print("Starting with desc")
+							print("PIMs == "+str(t))
+							print("Non-numeric PIMs")
+							exit(45)
 					elif value_match is None:
 						print(json.dumps(play))
 						print("Unknown penalty type: "+desc)
