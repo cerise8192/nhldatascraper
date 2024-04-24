@@ -9,12 +9,13 @@ import time
 import re
 import math
 import concurrent.futures
+import bz2
 from unidecode import unidecode
 from bs4 import BeautifulSoup,NavigableString,Tag
 from websockets.sync.client import connect
 
 def penalty_type(text):
-	types=['Abuse of officials', 'Abusive language', 'Aggressor', 'Bench', 'Boarding', 'Broken stick', 'Butt ending', 'Charging', 'Clipping', 'Closing hand on puck', 'Covering puck in crease', 'Cross checking', 'Cross-checking', 'Delay Game', 'Delay Game - Bench - FO Viol', 'Delay Game - Bench - FO viol', 'Delay Game - Equipment', 'Delay Game - FO Viol - hand', 'Delay Game - Goalie - restrict', 'Delay Game - Puck over glass', 'Delay Game - Smothering puck', 'Delay Game - Unsucc chlg', 'Delay Game - Unsucc chlg', 'Elbowing', 'Embellishment', 'Fighting', 'Game Misconduct', 'Game Misconduct - Head coach', 'Goalkeeper displaced net', 'Goalie leave crease', 'Hi stick', 'Hi-sticking', 'High-sticking', 'Holding', 'Holding stick', 'Holding the stick', 'Hooking', 'Illegal check to head', 'Illegal stick', 'Instigator', 'Interference', 'Interference on goalkeeper', 'Kneeing', 'Match [Pp]enalty', 'Minor', 'Misconduct', "Playing without a helmet", "Puck thrown fwd - Goalkeeper", "Removing opponent's helmet", 'Roughing', 'Roughing - Removing opp helmet', 'Slash', 'Slashing', 'Spearing', 'Throwing equipment', 'Throwing stick', 'Throw object at puck', 'Too many men/ice', 'Tripping', 'Unsportsmanlike conduct']
+	types=['Abuse of officials', 'Abusive language', 'Aggressor', 'Bench', 'Boarding', 'Broken stick', 'Butt ending', 'Charging', 'Clipping', 'Closing hand on puck', 'Coach/Mgr on ice - bench', 'Covering puck in crease', 'Cross checking', 'Cross-checking', 'Delay Game', 'Delay Game - Bench - FO Viol', 'Delay Game - Bench - FO viol', 'Delay Game - Equipment', 'Delay Game - FO Viol - hand', 'Delay Game - Goalie - restrict', 'Delay Game - Puck over glass', 'Delay Game - Smothering puck', 'Delay Game - Unsucc chlg', 'Delay Game - Unsucc chlg', 'Elbowing', 'Embellishment', 'Fighting', 'Game Misconduct', 'Game Misconduct - Head coach', "Goalie participat'n byd Center", 'Goalkeeper displaced net', 'Goalie leave crease', 'Hi stick', 'Hi-sticking', 'High-sticking', 'Holding', 'Holding stick', 'Holding the stick', 'Hooking', 'Illegal check to head', 'Illegal stick', 'Instigator', 'Interference', 'Interference on goalkeeper', 'Kneeing', 'Match [Pp]enalty', 'Minor', 'Misconduct', "Playing without a helmet", "Puck thrown fwd - Goalkeeper", "Removing opponent's helmet", 'Roughing', 'Roughing - Removing opp helmet', 'Slash', 'Slashing', 'Spearing', 'Throwing equipment', 'Throwing stick', 'Throw object at puck', 'Too many men/ice', 'Tripping', 'Unsportsmanlike conduct']
 	for penaltytype in types:
 		penalty_match=re.search('[ \t\n\r\f\v]*'+penaltytype+'[ \t\n\r\f\v]*', text)
 		if penalty_match is not None:
@@ -67,12 +68,21 @@ def cachename(url):
 def wget(url):
 	cachefile=cachename(url)
 	text=None
+
 	try:
-		f=open(cachefile, 'r')
-		text=''.join(f.readlines())
+		f=bz2.open(cachefile, "r")
+		text=''.join(f.readlines().decode("utf-8"))
 		f.close()
 	except Exception as e:
 		pass
+
+	if text is None:
+		try:
+			f=open(cachefile, 'r')
+			text=''.join(f.readlines())
+			f.close()
+		except Exception as e:
+			pass
 
 	if text is None:
 		headers={}
@@ -84,9 +94,13 @@ def wget(url):
 			if response.status_code == 200:
 				text=response.text
 				os.makedirs("cache", exist_ok=True)
-				f=open(cachefile, 'x')
-				f.write(text)
+#				f=open(cachefile, 'x')
+#				f.write(text)
+#				f.close()
+				f=bz2.open(cachefile, 'x')
+				f.write(bytes(text, 'utf-8'))
 				f.close()
+				
 			else:
 				print("code = "+str(response.status_code))
 		except Exception as e:
@@ -2098,6 +2112,32 @@ def get_shifts_thv(data, collated):
 def get_decisions(data, collated):
 	collated['decisions']={}
 
+	lkey='L'
+	lpoints=0
+	wpoints=0
+	if data['PXP']['gameType'] == 2:
+		wpoints=2
+
+		#Someday, I will need to add code here as the overtime loser point
+		#   can be negated.  For example, if overtime ends from an empty net
+		#   goal because the goalie was pulled and it wasn't in response to
+		#   a delayed penalty.  See 2017/02/0156 and 2023/02/1023 for examples
+		#   where the loser point could have been negated.
+		if data['PXP']['periodDescriptor']['periodType'] != "REG":
+			lkey='OTL'
+			lpoints=1
+
+	if data['PXP']['summary']['linescore']['totals']['away'] > data['PXP']['summary']['linescore']['totals']['home']:
+		collated['decisions']['W']=data['PXP']['awayTeam']['abbrev']
+		collated['decisions'][lkey]=data['PXP']['homeTeam']['abbrev']
+	else:
+		collated['decisions'][lkey]=data['PXP']['awayTeam']['abbrev']
+		collated['decisions']['W']=data['PXP']['homeTeam']['abbrev']
+
+	collated['decisions']['points']={}
+	collated['decisions']['points'][collated['decisions']['W']]=wpoints
+	collated['decisions']['points'][collated['decisions'][lkey]]=lpoints
+
 	return collated
 
 def print_shifts(collated, nhlid):
@@ -2684,7 +2724,6 @@ def parsedesc(formatspec, desc, play, player_lookup):
 				value_match=re.match('[OND][fe][fu][.] Zone', desc)
 
 			elif template[type_i+1:] == 'player':
-				debug=True
 				if debug:
 					for match in re.findall('[0-9]+', desc):
 						for similar in player_lookup:
@@ -2926,7 +2965,8 @@ def parse_pl(data, collated):
 					exit(9)
 
 			desc=','.join(parsera)
-			print("Debug desc: "+desc)
+			if debug:
+				print("Debug desc: "+desc)
 			play=parsedesc(desc, plplay['Description'], play, collated['lookup']['players'])
 
 		elif plplay['Event'] == 'CHL':
@@ -3388,6 +3428,7 @@ def add_icing(collated, playi):
 	return collated
 
 def add_zone(collated, playi):
+	debug=False
 	play=collated['plays'][playi]
 	if 'SubZone' not in play:
 		return collated
@@ -3412,9 +3453,11 @@ def add_zone(collated, playi):
 						continue
 					elif k == 'changes':
 						continue
-					print(json.dumps(play[k]))
-				print(collated['teams']['home']['abv']+" == home")
-				print("Zone == "+play['SubZone']+" == "+str(play['PXP']['details']['xCoord'])+", "+play['PXP']['homeTeamDefendingSide']+" -> "+play['Zone'])
+					if debug:
+						print(json.dumps(play[k]))
+				if debug:
+					print(collated['teams']['home']['abv']+" == home")
+					print("Zone == "+play['SubZone']+" == "+str(play['PXP']['details']['xCoord'])+", "+play['PXP']['homeTeamDefendingSide']+" -> "+play['Zone'])
 
 	return collated
 
@@ -4702,7 +4745,7 @@ def final_game(game):
 		pass
 
 	try:
-		if game['status'] == 'Final' and game['version'] == 1:
+		if False and game['status'] == 'Final' and game['version'] == 1:
 			return True
 	except KeyError as e:
 		print(e)
