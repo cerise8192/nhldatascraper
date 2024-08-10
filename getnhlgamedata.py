@@ -3461,6 +3461,37 @@ def add_zone(collated, playi):
 
 	return collated
 
+def add_empty_net(collated, playi):
+	play=collated['plays'][playi]
+	if 'Shooter' in play:
+		for shooter in play['Shooter']:
+			play['Shooter Team']=collated['players'][shooter]['Team']
+		if 'Shooter Team' not in play:
+			exit(6)
+
+	for teampos in collated['teams']:
+		abv=collated['teams'][teampos]['abv']
+		if abv not in play:
+			continue
+
+		for nhlid in play[abv]['onice']:
+			if collated['players'][int(nhlid)]['Position'] == 'G':
+				play[abv]['Goalie']=nhlid
+
+		play[abv]['Empty Net']=False
+		if 'Goalie' not in play[abv]:
+			play[abv]['Empty Net']=True
+			
+		if play['PLEvent'] == 'GOAL' or play['PLEvent'] == 'BLOCK' or play['PLEvent'] == 'MISS' or play['PLEvent'] == 'SHOT':
+			if play['Shooter Team'] != abv and 'Goalie' not in play[abv]:
+				play['Empty Net']=True
+			else:
+				play['Empty Net']=False
+
+	collated['plays'][playi]=play
+	return collated
+
+
 def add_stops(collated, playi):
 	if 'stop' not in collated['temp']:
 		collated['temp']['stop']=True
@@ -3556,6 +3587,11 @@ def merge_loop(data, collated):
 		if debug:
 			print("   add zone")
 		collated=add_zone(collated, playi)
+
+		if debug:
+			print("   add empty net info")
+		collated=add_empty_net(collated, playi)
+
 		if debug:
 			print("Ending "+str(playi)+"/"+str(len(collated['plays'])))
 
@@ -4861,7 +4897,7 @@ def main():
 				games.append(game)
 			now=now-day
 
-	if single_thread:
+	if single_thread or len(games) == 1:
 		for game in games:
 			thread_main(game)
 	else:
