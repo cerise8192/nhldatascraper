@@ -3443,10 +3443,26 @@ def add_zone(collated, playi):
 			if 'xCoord' in play['PXP']['details']:
 				if play['PXP']['details']['xCoord'] <= -30:
 					play['Zone']='Left'
+					if 'homeTeamDefendingSide' in play['PXP'] and play['PXP']['homeTeamDefendingSide'] == 'left':
+						play[collated['teams']['home']['abv']]['Zone']='Def. Zone'
+						play[collated['teams']['away']['abv']]['Zone']='Off. Zone'
+					elif 'homeTeamDefendingSide' in play['PXP'] and play['PXP']['homeTeamDefendingSide'] == 'right':
+						play[collated['teams']['home']['abv']]['Zone']='Off. Zone'
+						play[collated['teams']['away']['abv']]['Zone']='Def. Zone'
 				elif play['PXP']['details']['xCoord'] < 30:
 					play['Zone']='Center'
+					if 'homeTeamDefendingSide' in play['PXP']:
+						play[collated['teams']['home']['abv']]['Zone']='Neu. Zone'
+						play[collated['teams']['away']['abv']]['Zone']='Neu. Zone'
 				else:
 					play['Zone']='Right'
+					if 'homeTeamDefendingSide' in play['PXP'] and play['PXP']['homeTeamDefendingSide'] == 'left':
+						play[collated['teams']['home']['abv']]['Zone']='Def. Zone'
+						play[collated['teams']['away']['abv']]['Zone']='Off. Zone'
+					elif 'homeTeamDefendingSide' in play['PXP'] and play['PXP']['homeTeamDefendingSide'] == 'right':
+						play[collated['teams']['home']['abv']]['Zone']='Off. Zone'
+						play[collated['teams']['away']['abv']]['Zone']='Def. Zone'
+
 
 				for k in play:
 					if k == 'PXP':
@@ -3481,7 +3497,7 @@ def add_empty_net(collated, playi):
 		play[abv]['Empty Net']=False
 		if 'Goalie' not in play[abv]:
 			play[abv]['Empty Net']=True
-			
+
 		if play['PLEvent'] == 'GOAL' or play['PLEvent'] == 'BLOCK' or play['PLEvent'] == 'MISS' or play['PLEvent'] == 'SHOT':
 			if play['Shooter Team'] != abv and 'Goalie' not in play[abv]:
 				play['Empty Net']=True
