@@ -4811,6 +4811,7 @@ def final_game(game):
 def make_game_struct(gamepk):
 	game={}
 	game['gamePk']=str(gamepk)
+	game['path']=game['gamePk'][0:4]+'/'+game['gamePk'][4:6]+'/'+game['gamePk'][6:10]
 	game['season']=game['gamePk'][0:4]
 	game['season']=str(game['season'])+str(int(game['season'])+1)
 	game['gameType']="P"
