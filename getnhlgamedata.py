@@ -71,9 +71,13 @@ def wget(url):
 
 	try:
 		f=bz2.open(cachefile, "r")
-		text=''.join(f.readlines().decode("utf-8"))
+		text=''
+		for line in f.readlines():
+			text=text+line.decode("utf-8")
+		#text=''.join(f.readlines().decode("utf-8"))
 		f.close()
 	except Exception as e:
+		text=None
 		pass
 
 	if text is None:
@@ -82,6 +86,7 @@ def wget(url):
 			text=''.join(f.readlines())
 			f.close()
 		except Exception as e:
+			text=None
 			pass
 
 	if text is None:
@@ -482,10 +487,18 @@ def get_pxp(game):
 		if text is None:
 			continue
 		try:
+			with open('/tmp/pxp-'+suffix, 'w') as f:
+				f.write("wget\n")
+				f.write(text)
+				f.close()
 			newdata=json.loads(text)
 			for k in newdata:
 				if k not in playbyplay:
 					playbyplay[k]=newdata[k]
+				with open('/tmp/pxp-'+suffix, 'w') as f:
+					f.write("json\n")
+					f.write(json.dumps(playbyplay[k], indent=3))
+					f.close()
 		except Exception as e:
 			print(text)
 			print(url)
@@ -497,8 +510,16 @@ def get_pxp(game):
 	if text is None:
 		return None
 	try:
+		with open('/tmp/pxp-shifts', 'w') as f:
+			f.write("wget\n")
+			f.write(text)
+			f.close()
 		newdata=json.loads(text)
 		playbyplay['shifts']=newdata
+		with open('/tmp/pxp-shifts', 'w') as f:
+			f.write("json\n")
+			f.write(json.dumps(playbyplay['shifts'], indent=3))
+			f.close()
 	except Exception as e:
 		print(text)
 		print(url)
@@ -1132,9 +1153,14 @@ def get_teams_pxp(data, collated):
 	debug=False
 	for teamloc in ['away', 'home']:
 		print("   "+teamloc)
-		teamname=data['PXP'][teamloc+'Team']['name']
-		if 'default' in teamname:
-			teamname=teamname['default']
+		print(json.dumps(data['PXP'][teamloc+'Team'], indent=3))
+		if 'name' in data['PXP'][teamloc+'Team']:
+			teamname=data['PXP'][teamloc+'Team']['name']
+			if 'default' in teamname:
+				teamname=teamname['default']
+		elif 'placeName' in data['PXP'][teamloc+'Team'] and 'commonName' in data['PXP'][teamloc+'Team']:
+			teamname=data['PXP'][teamloc+'Team']['placeName']['default']+" "+data['PXP'][teamloc+'Team']['commonName']['default']
+
 		print("      Name: "+teamname)
 		abv=data['PXP'][teamloc+'Team']['abbrev']
 		print("      Abv : "+abv)
@@ -4881,7 +4907,7 @@ def get_season(season):
 
 def main():
 	games=[]
-	single_thread=False
+	single_thread=True
 	if len(sys.argv) > 1:
 		for i in range(1, len(sys.argv)):
 			if re.match('[0-9]+[/][0-9]+[/][0-9]+', sys.argv[i]):
